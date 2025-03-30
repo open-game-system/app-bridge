@@ -38,7 +38,8 @@ export class RNBridge extends ClientBridge {
    */
   setPlatformValue<T>(key: string, value: T): void {
     const platformKey = `platform.${Platform.OS}.${key}`;
-    this.setValue(platformKey, value);
+    // Call the setValue method inherited from ClientBridge
+    super.setValue(platformKey, value);
   }
   
   /**
@@ -46,6 +47,7 @@ export class RNBridge extends ClientBridge {
    */
   getPlatformValue<T>(key: string): T | undefined {
     const platformKey = `platform.${Platform.OS}.${key}`;
-    return this.getValue<T>(platformKey);
+    // Call the getValue method inherited from ClientBridge
+    return super.getValue<T>(platformKey);
   }
 } 

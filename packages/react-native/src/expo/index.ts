@@ -10,11 +10,11 @@ export class ExpoBridge extends RNBridge {
     super(options);
     
     // Initialize with Expo-specific defaults
-    this.setValue('platform.isExpo', true);
+    super.setValue('platform.isExpo', true);
     
     // Add Expo version if available
     if (global.expo && global.expo.version) {
-      this.setValue('platform.expoVersion', global.expo.version);
+      super.setValue('platform.expoVersion', global.expo.version);
     }
   }
   
