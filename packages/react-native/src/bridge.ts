@@ -1,11 +1,11 @@
-import { BridgeAction, BridgeOptions } from '@open-game-system/app-bridge';
-import { ClientBridge } from '@open-game-system/app-bridge-web/client';
+import { Bridge, BridgeAction, BridgeOptions, BridgeState } from '@open-game-system/app-bridge';
+import { produce } from '@open-game-system/app-bridge/utils';
 import { Platform } from 'react-native';
 
 /**
  * React Native specific bridge implementation
  */
-export class RNBridge extends ClientBridge {
+export class RNBridge extends Bridge {
   constructor(options: BridgeOptions = {}) {
     super({
       ...options,
@@ -17,9 +17,64 @@ export class RNBridge extends ClientBridge {
    * Process an action for React Native
    */
   protected processAction(action: BridgeAction): void {
-    // Add RN-specific action handling here if needed
-    // For now, just delegate to the client bridge
-    super.processAction(action);
+    switch (action.type) {
+      case 'SET_STATE':
+        if (action.payload && typeof action.payload === 'object') {
+          this.setState(action.payload as BridgeState);
+        }
+        break;
+
+      case 'UPDATE_STATE':
+        if (action.payload && typeof action.payload === 'object') {
+          const currentState = this.getState();
+          const newState = produce(currentState, (draft: BridgeState) => {
+            Object.assign(draft, action.payload);
+          });
+          this.setState(newState);
+        }
+        break;
+
+      default:
+        // For any other actions, let the parent class handle them
+        super.processAction(action);
+        break;
+    }
+  }
+
+  /**
+   * Set a specific value in the state
+   */
+  setValue<T>(key: string, value: T): void {
+    this.dispatch({
+      type: 'UPDATE_STATE',
+      payload: { [key]: value },
+    });
+  }
+
+  /**
+   * Get a specific value from the state
+   */
+  getValue<T>(key: string): T | undefined {
+    const state = this.getState();
+    return state[key] as T | undefined;
+  }
+
+  /**
+   * Clear a specific key from the state
+   */
+  clearValue(key: string): void {
+    const state = this.getState();
+    const newState = produce(state, (draft: BridgeState) => {
+      delete draft[key];
+    });
+    this.setState(newState);
+  }
+
+  /**
+   * Reset the state to the given state or empty object
+   */
+  resetState(newState: BridgeState = {}): void {
+    this.setState(newState);
   }
 
   /**
@@ -38,8 +93,7 @@ export class RNBridge extends ClientBridge {
    */
   setPlatformValue<T>(key: string, value: T): void {
     const platformKey = `platform.${Platform.OS}.${key}`;
-    // Call the setValue method inherited from ClientBridge
-    super.setValue(platformKey, value);
+    this.setValue(platformKey, value);
   }
 
   /**
@@ -47,7 +101,6 @@ export class RNBridge extends ClientBridge {
    */
   getPlatformValue<T>(key: string): T | undefined {
     const platformKey = `platform.${Platform.OS}.${key}`;
-    // Call the getValue method inherited from ClientBridge
-    return super.getValue<T>(platformKey);
+    return this.getValue<T>(platformKey);
   }
 }
