@@ -68,5 +68,5 @@ This document tracks progress toward the initial repository setup for the app-br
 
 ## Setup Documentation
 
-- [ ] Create main README.md
+- [x] Create main README.md
 - [ ] Add package-specific documentation 
