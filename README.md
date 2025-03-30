@@ -70,4 +70,70 @@ pnpm dev
 
 ## License
 
-[MIT](LICENSE) 
+[MIT](LICENSE)
+
+# Expo App Example for OpenGame App Bridge
+
+This is an example Expo application that demonstrates the usage of the OpenGame App Bridge in a React Native environment.
+
+## Features
+
+- Integration with the OpenGame App Bridge
+- Example of state management in React Native
+- Counter demonstration with increment/decrement functionality
+- List management example
+
+## Running the Application
+
+1. Make sure you have the Expo CLI installed:
+   ```
+   npm install -g expo-cli
+   ```
+
+2. Install dependencies:
+   ```
+   pnpm install
+   ```
+
+3. Start the development server:
+   ```
+   pnpm start
+   ```
+
+4. Use the Expo Go app on your mobile device to scan the QR code, or run in a simulator/emulator.
+
+## Project Structure
+
+- `App.tsx` - Main application component using the App Bridge
+- `index.js` - Entry point for Expo
+- `app.json` - Expo configuration
+
+## How It Works
+
+This example uses Babel's module resolver plugin to directly import from the source files of each package in the monorepo. This approach has several advantages:
+
+1. No need for complex Metro configuration
+2. No need for scripts to copy or build packages
+3. Changes to source files are immediately reflected in the Expo app
+
+The babel.config.js file maps import paths from the published package names to their source locations:
+
+```js
+// Example path mapping
+alias: {
+  '@open-game-system/app-bridge': '../../packages/core/src',
+  '@open-game-system/app-bridge-react': '../../packages/react/src',
+  // ...other aliases
+}
+```
+
+This approach is used by many popular React Native libraries that support monorepos.
+
+## Notes on Web Support
+
+The web support for this example requires additional configuration. Currently, there are some dependency issues when building for web. If you need web support, you may need to:
+
+1. Use a specific version of react-native-web compatible with Expo 48
+2. Install additional dependencies such as `styleq` with the right version
+
+For development purposes, it's recommended to use the native (iOS/Android) targets. 

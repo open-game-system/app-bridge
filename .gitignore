@@ -40,4 +40,20 @@ coverage/
 .temp/
 .tmp/
 tmp/
-temp/ 
+temp/
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+
+# Native
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Temporary files created by Metro
+.metro-health-check* 

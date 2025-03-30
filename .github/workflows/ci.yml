@@ -39,17 +39,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
             
-      - name: Install dependencies
+      - name: Install root dependencies
         run: pnpm install --no-frozen-lockfile
         
-      - name: Build all packages
+      - name: Build all library packages
         run: pnpm build
         
-      - name: Run tests
+      - name: Run tests for library packages
         run: pnpm test
         
       - name: Build example React app
         run: |
           cd examples/react-app
           pnpm install --no-frozen-lockfile
-          pnpm build 
+          pnpm build
+          
+      - name: Test Expo app
+        run: |
+          cd examples/expo-app
+          pnpm install --no-frozen-lockfile
+          pnpm test
+          echo "Expo app tests completed successfully" 
