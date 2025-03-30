@@ -50,10 +50,10 @@ This document tracks progress toward the initial repository setup for the app-br
 
 ## Setup Testing Package
 
-- [ ] Create directory structure for packages/testing
-- [ ] Add package.json with dependencies
-- [ ] Create tsconfig.json and vite.config.ts
-- [ ] Implement mock bridges and stores for testing
+- [x] Create directory structure for packages/testing
+- [x] Add package.json with dependencies
+- [x] Create tsconfig.json and vite.config.ts
+- [x] Implement mock bridges and stores for testing
 
 ## Create Example Applications
 
