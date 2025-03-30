@@ -43,10 +43,10 @@ This document tracks progress toward the initial repository setup for the app-br
 
 ## Setup React Native Package
 
-- [ ] Create directory structure for packages/react-native
-- [ ] Add package.json with dependencies and exports 
-- [ ] Create tsconfig.json and vite configs (both main and RN specific)
-- [ ] Implement React Native bridge implementation and Expo integration
+- [x] Create directory structure for packages/react-native
+- [x] Add package.json with dependencies and exports 
+- [x] Create tsconfig.json and vite configs (both main and RN specific)
+- [x] Implement React Native bridge implementation and Expo integration
 
 ## Setup Testing Package
 
