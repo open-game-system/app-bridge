@@ -42,13 +42,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install
         
-      - name: Lint
-        run: pnpm biome check . --skip-errors || true
-        continue-on-error: true
-        
       - name: Build all packages
         run: pnpm build
-        continue-on-error: true
         
       - name: Run tests
         run: pnpm test
@@ -57,5 +52,4 @@ jobs:
         run: |
           cd examples/react-app
           pnpm install
-          pnpm build
-        continue-on-error: true 
+          pnpm build 

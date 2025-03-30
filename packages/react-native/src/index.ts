@@ -15,9 +15,7 @@ export {
 } from '@open-game-system/app-bridge-react';
 
 // Re-export context interface type
-export type {
-  BridgeContextValue,
-} from '@open-game-system/app-bridge-react/context';
+export type { BridgeContextValue } from '@open-game-system/app-bridge-react/context';
 
 // Re-export from core for convenience
 export type {

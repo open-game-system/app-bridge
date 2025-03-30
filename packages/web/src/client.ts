@@ -1,3 +1,3 @@
 import { ClientBridge } from './bridge';
 
-export { ClientBridge }; 
+export { ClientBridge };

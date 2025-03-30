@@ -1,6 +1,6 @@
-import { createContext, useContext } from 'react';
 import { BridgeState, Selector } from '@open-game-system/app-bridge';
 import type { WebBridge } from '@open-game-system/app-bridge-web';
+import { createContext, useContext } from 'react';
 
 /**
  * Context interface for the bridge

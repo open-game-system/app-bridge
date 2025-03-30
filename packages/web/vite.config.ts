@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 
 export default defineConfig({
@@ -17,10 +17,7 @@ export default defineConfig({
       },
     },
     rollupOptions: {
-      external: [
-        '@open-game-system/app-bridge',
-        '@open-game-system/app-bridge/utils'
-      ],
+      external: ['@open-game-system/app-bridge', '@open-game-system/app-bridge/utils'],
       output: {
         exports: 'named',
       },

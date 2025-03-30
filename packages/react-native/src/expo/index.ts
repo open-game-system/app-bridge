@@ -1,6 +1,6 @@
 import { BridgeOptions } from '@open-game-system/app-bridge';
-import { RNBridge } from '../bridge';
 import { Platform } from 'react-native';
+import { RNBridge } from '../bridge';
 
 /**
  * Expo-specific bridge implementation

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Bridge } from '../src';
 
 describe('Core Bridge', () => {
@@ -11,17 +11,17 @@ describe('Core Bridge', () => {
   it('should track subscriptions', () => {
     const bridge = new Bridge();
     let notified = false;
-    
+
     const unsubscribe = bridge.subscribe(() => {
       notified = true;
     });
-    
+
     bridge.dispatch({ type: 'TEST_ACTION' });
     expect(notified).toBe(true);
-    
+
     notified = false;
     unsubscribe();
     bridge.dispatch({ type: 'TEST_ACTION' });
     expect(notified).toBe(false);
   });
-}); 
+});

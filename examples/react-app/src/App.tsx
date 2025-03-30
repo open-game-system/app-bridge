@@ -1,20 +1,20 @@
-import { useState } from 'react';
-import { ClientBridge } from '@open-game-system/app-bridge-web';
-import { 
-  useValue, 
-  useSetValue, 
+import {
   BridgeContext,
-  useAppState
+  useAppState,
+  useSetValue,
+  useValue,
 } from '@open-game-system/app-bridge-react';
+import { ClientBridge } from '@open-game-system/app-bridge-web';
+import { useState } from 'react';
 
 // Create a bridge instance
 const bridge = new ClientBridge({
+  debug: true,
   initialState: {
     count: 0,
-    message: 'Welcome to OpenGame App Bridge!',
     items: [],
+    message: 'Welcome to OpenGame App Bridge!',
   },
-  debug: true,
 });
 
 // Counter component that uses the bridge
@@ -29,8 +29,12 @@ function Counter() {
     <div className="card">
       <h2>Counter: {count}</h2>
       <div>
-        <button onClick={decrement}>-</button>
-        <button onClick={increment}>+</button>
+        <button type="button" onClick={decrement}>
+          -
+        </button>
+        <button type="button" onClick={increment}>
+          +
+        </button>
       </div>
     </div>
   );
@@ -56,7 +60,9 @@ function MessageEditor() {
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
           placeholder="Enter a new message"
         />
-        <button onClick={updateMessage}>Update</button>
+        <button type="button" onClick={updateMessage}>
+          Update
+        </button>
       </div>
     </div>
   );
