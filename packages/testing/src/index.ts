@@ -7,5 +7,5 @@ export type {
   BridgeAction,
   BridgeState,
   StoreListener,
-  Selector
-} from '@open-game-system/app-bridge'; 
+  Selector,
+} from '@open-game-system/app-bridge';

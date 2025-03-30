@@ -1,6 +1,6 @@
 /**
  * A simplified immer-like produce function for immutable state updates
- * 
+ *
  * @param state The base state to update
  * @param updater A function that mutates a draft state which is then used to produce the next state
  * @returns A new state object with the applied changes
@@ -8,10 +8,10 @@
 export function produce<T extends object>(state: T, updater: (draft: T) => void): T {
   // Create a shallow copy as the draft
   const draft = { ...state } as T;
-  
+
   // Apply updates to the draft
   updater(draft);
-  
+
   // Return the updated draft as the new state
   return draft;
 }
@@ -36,4 +36,4 @@ export function deepClone<T>(obj: T): T {
   }
 
   return result;
-} 
+}

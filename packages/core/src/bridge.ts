@@ -29,7 +29,7 @@ export class Bridge {
    */
   subscribe(listener: StoreListener): () => void {
     this.listeners.add(listener);
-    
+
     // Return unsubscribe function
     return () => {
       this.listeners.delete(listener);
@@ -90,7 +90,7 @@ export class Bridge {
    */
   private notifyListeners(): void {
     const currentState = this.getState();
-    this.listeners.forEach(listener => {
+    this.listeners.forEach((listener) => {
       try {
         listener(currentState);
       } catch (error) {
@@ -98,4 +98,4 @@ export class Bridge {
       }
     });
   }
-} 
+}

@@ -8,16 +8,16 @@ import { Platform } from 'react-native';
 export class ExpoBridge extends RNBridge {
   constructor(options: BridgeOptions = {}) {
     super(options);
-    
+
     // Initialize with Expo-specific defaults
     super.setValue('platform.isExpo', true);
-    
+
     // Add Expo version if available
     if (global.expo && global.expo.version) {
       super.setValue('platform.expoVersion', global.expo.version);
     }
   }
-  
+
   /**
    * Get Expo-specific information
    */
@@ -26,7 +26,7 @@ export class ExpoBridge extends RNBridge {
       isExpo: true,
       version: global.expo?.version,
       platform: Platform.OS,
-      expoConstants: global.expo?.Constants
+      expoConstants: global.expo?.Constants,
     };
   }
 }
@@ -36,4 +36,4 @@ export class ExpoBridge extends RNBridge {
  */
 export function createExpoBridge(options: BridgeOptions = {}): ExpoBridge {
   return new ExpoBridge(options);
-} 
+}

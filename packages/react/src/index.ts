@@ -11,8 +11,8 @@ export type {
   BridgeOptions,
   BridgeState,
   StoreListener,
-  Selector
+  Selector,
 } from '@open-game-system/app-bridge';
 
 // Re-export client bridge
-export { ClientBridge } from '@open-game-system/app-bridge-client'; 
+export { ClientBridge } from '@open-game-system/app-bridge-client';

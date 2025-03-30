@@ -2,11 +2,13 @@
 
 // Declare the global Expo object
 declare namespace global {
-  var expo: {
-    version?: string;
-    Constants?: Record<string, any>;
-  } | undefined;
+  var expo:
+    | {
+        version?: string;
+        Constants?: Record<string, any>;
+      }
+    | undefined;
 }
 
 // Declare the __DEV__ variable
-declare const __DEV__: boolean; 
+declare const __DEV__: boolean;

@@ -12,7 +12,7 @@ export {
   useSetValue,
   useSelector,
   useDispatch,
-  useSubscribe
+  useSubscribe,
 } from '@open-game-system/app-bridge-react';
 
 // Re-export from core for convenience
@@ -22,5 +22,5 @@ export type {
   BridgeOptions,
   BridgeState,
   StoreListener,
-  Selector
-} from '@open-game-system/app-bridge'; 
+  Selector,
+} from '@open-game-system/app-bridge';

@@ -6,7 +6,7 @@ import { BridgeAction, BridgeState, Selector, StoreListener } from '@open-game-s
 export class MockStore {
   private state: BridgeState;
   private listeners: Set<StoreListener>;
-  
+
   /**
    * Create a new mock store
    */
@@ -14,31 +14,31 @@ export class MockStore {
     this.state = { ...initialState };
     this.listeners = new Set();
   }
-  
+
   /**
    * Get the current state
    */
   getState(): BridgeState {
     return { ...this.state };
   }
-  
+
   /**
    * Subscribe to state changes
    */
   subscribe(listener: StoreListener): () => void {
     this.listeners.add(listener);
-    
+
     return () => {
       this.listeners.delete(listener);
     };
   }
-  
+
   /**
    * Dispatch a mock action
    */
   dispatch(action: BridgeAction): void {
     console.log('Mock store dispatching:', action);
-    
+
     // Simple reducer
     switch (action.type) {
       case 'SET_STATE':
@@ -46,19 +46,19 @@ export class MockStore {
           this.setState(action.payload as BridgeState);
         }
         break;
-        
+
       case 'UPDATE_STATE':
         if (action.payload && typeof action.payload === 'object') {
           this.setState({ ...this.state, ...action.payload });
         }
         break;
-        
+
       default:
         // Do nothing for other actions
         break;
     }
   }
-  
+
   /**
    * Update state
    */
@@ -66,13 +66,13 @@ export class MockStore {
     this.state = newState;
     this.notifyListeners();
   }
-  
+
   /**
    * Notify all listeners of state changes
    */
   private notifyListeners(): void {
     const currentState = this.getState();
-    this.listeners.forEach(listener => {
+    this.listeners.forEach((listener) => {
       try {
         listener(currentState);
       } catch (error) {
@@ -80,11 +80,11 @@ export class MockStore {
       }
     });
   }
-  
+
   /**
    * Helper to select state with a selector
    */
   select<T>(selector: Selector<T>): T {
     return selector(this.getState());
   }
-} 
+}

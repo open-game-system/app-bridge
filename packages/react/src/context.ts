@@ -15,7 +15,7 @@ export interface BridgeContextValue {
  */
 const defaultContextValue: BridgeContextValue = {
   bridge: null,
-  state: {}
+  state: {},
 };
 
 /**
@@ -35,11 +35,13 @@ export function useBridgeContext(): BridgeContextValue {
  */
 export function useBridge(): ClientBridge {
   const { bridge } = useBridgeContext();
-  
+
   if (!bridge) {
-    throw new Error('No bridge instance found in context. Did you forget to wrap your component with BridgeProvider?');
+    throw new Error(
+      'No bridge instance found in context. Did you forget to wrap your component with BridgeProvider?'
+    );
   }
-  
+
   return bridge;
 }
 
@@ -57,4 +59,4 @@ export function useAppState(): BridgeState {
 export function useAppSelector<T>(selector: Selector<T>): T {
   const state = useAppState();
   return selector(state);
-} 
+}

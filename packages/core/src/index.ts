@@ -5,4 +5,4 @@ export * from './bridge';
 export * from './types';
 
 // Re-export utilities
-export * as utils from './utils'; 
+export * as utils from './utils';

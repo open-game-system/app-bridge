@@ -1,4 +1,4 @@
-import { BridgeAction, BridgeOptions, BridgeState } from '@open-game-system/app-bridge';
+import { BridgeAction, BridgeOptions } from '@open-game-system/app-bridge';
 import { ClientBridge } from '@open-game-system/app-bridge-client';
 import { Platform } from 'react-native';
 
@@ -9,7 +9,7 @@ export class RNBridge extends ClientBridge {
   constructor(options: BridgeOptions = {}) {
     super({
       ...options,
-      debug: options.debug || __DEV__
+      debug: options.debug || __DEV__,
     });
   }
 
@@ -21,18 +21,18 @@ export class RNBridge extends ClientBridge {
     // For now, just delegate to the client bridge
     super.processAction(action);
   }
-  
+
   /**
    * Get platform-specific information
    */
-  getPlatformInfo(): Record<string, any> {
+  getPlatformInfo(): Record<string, string | boolean | number> {
     return {
       platform: Platform.OS,
       version: Platform.Version,
-      isExpo: typeof global.expo !== 'undefined'
+      isTV: Platform.isTV,
     };
   }
-  
+
   /**
    * Set a platform-specific value
    */
@@ -41,7 +41,7 @@ export class RNBridge extends ClientBridge {
     // Call the setValue method inherited from ClientBridge
     super.setValue(platformKey, value);
   }
-  
+
   /**
    * Get a platform-specific value
    */
@@ -50,4 +50,4 @@ export class RNBridge extends ClientBridge {
     // Call the getValue method inherited from ClientBridge
     return super.getValue<T>(platformKey);
   }
-} 
+}

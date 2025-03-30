@@ -9,14 +9,13 @@ export default defineConfig({
         index: resolve(__dirname, 'src/index.ts'),
       },
       formats: ['es', 'cjs'],
-      fileName: (format, entryName) => 
-        `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
     },
     rollupOptions: {
-      external: ['@open-game-system/app-bridge']
+      external: ['@open-game-system/app-bridge'],
     },
     sourcemap: true,
-    minify: false
+    minify: false,
   },
-  plugins: [dts()]
-}); 
+  plugins: [dts()],
+});

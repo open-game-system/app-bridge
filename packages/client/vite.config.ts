@@ -7,17 +7,16 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
-        bridge: resolve(__dirname, 'src/bridge.ts')
+        bridge: resolve(__dirname, 'src/bridge.ts'),
       },
       formats: ['es', 'cjs'],
-      fileName: (format, entryName) => 
-        `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
     },
     rollupOptions: {
-      external: ['@open-game-system/app-bridge']
+      external: ['@open-game-system/app-bridge'],
     },
     sourcemap: true,
-    minify: false
+    minify: false,
   },
-  plugins: [dts()]
-}); 
+  plugins: [dts()],
+});

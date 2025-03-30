@@ -15,7 +15,7 @@ export class ClientBridge extends Bridge {
           this.setState(action.payload as BridgeState);
         }
         break;
-        
+
       case 'UPDATE_STATE':
         if (action.payload && typeof action.payload === 'object') {
           const currentState = this.getState();
@@ -25,24 +25,24 @@ export class ClientBridge extends Bridge {
           this.setState(newState);
         }
         break;
-        
+
       default:
         // For any other actions, let the parent class handle them
         super.processAction(action);
         break;
     }
   }
-  
+
   /**
    * Set a specific value in the state
    */
   setValue<T>(key: string, value: T): void {
     this.dispatch({
       type: 'UPDATE_STATE',
-      payload: { [key]: value }
+      payload: { [key]: value },
     });
   }
-  
+
   /**
    * Get a specific value from the state
    */
@@ -50,7 +50,7 @@ export class ClientBridge extends Bridge {
     const state = this.getState();
     return state[key] as T | undefined;
   }
-  
+
   /**
    * Clear a specific key from the state
    */
@@ -61,11 +61,11 @@ export class ClientBridge extends Bridge {
     });
     this.setState(newState);
   }
-  
+
   /**
    * Reset the state to the given state or empty object
    */
   resetState(newState: BridgeState = {}): void {
     this.setState(newState);
   }
-} 
+}

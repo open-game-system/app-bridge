@@ -38,4 +38,4 @@ export interface BridgeOptions {
   initialState?: BridgeState;
   middlewares?: BridgeMiddleware[];
   debug?: boolean;
-} 
+}

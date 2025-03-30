@@ -8,25 +8,24 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
-        'expo/index': resolve(__dirname, 'src/expo/index.ts')
+        'expo/index': resolve(__dirname, 'src/expo/index.ts'),
       },
       formats: ['es', 'cjs'],
-      fileName: (format, entryName) => 
-        `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
     },
     rollupOptions: {
       external: [
-        'react', 
-        'react-native', 
+        'react',
+        'react-native',
         'expo',
         '@open-game-system/app-bridge',
         '@open-game-system/app-bridge-client',
         '@open-game-system/app-bridge-react',
-        /^@open-game-system\/app-bridge/
-      ]
+        /^@open-game-system\/app-bridge/,
+      ],
     },
     sourcemap: true,
-    minify: false
+    minify: false,
   },
   plugins: [
     dts(),
@@ -35,7 +34,7 @@ export default defineConfig({
       closeBundle() {
         console.log('Building React Native specific bundle...');
         execSync('vite build --config vite.rn.config.ts', { stdio: 'inherit' });
-      }
-    }
-  ]
-}); 
+      },
+    },
+  ],
+});

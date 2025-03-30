@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 
 export default defineConfig({
@@ -8,17 +8,16 @@ export default defineConfig({
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
         types: resolve(__dirname, 'src/types.ts'),
-        'utils/index': resolve(__dirname, 'src/utils/index.ts')
+        'utils/index': resolve(__dirname, 'src/utils/index.ts'),
       },
       formats: ['es', 'cjs'],
-      fileName: (format, entryName) => 
-        `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'mjs' : 'js'}`,
     },
     rollupOptions: {
-      external: [] // No external dependencies for core
+      external: [], // No external dependencies for core
     },
     sourcemap: true,
-    minify: false
+    minify: false,
   },
-  plugins: [dts()]
-}); 
+  plugins: [dts()],
+});
