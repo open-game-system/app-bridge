@@ -48,7 +48,7 @@ function MessageEditor() {
       <div>
         <input 
           value={input} 
-          onChange={(e) => setInput(e.target.value)} 
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)} 
           placeholder="Enter a new message"
         />
         <button onClick={updateMessage}>Update</button>

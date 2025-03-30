@@ -2,6 +2,7 @@
   "name": "@open-game-system/app-bridge-monorepo",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
