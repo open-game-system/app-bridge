@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Bridge } from '../src';
+import { Bridge } from '../src/bridge';
 
 describe('Core Bridge', () => {
   it('should create a bridge instance', () => {
@@ -23,5 +23,12 @@ describe('Core Bridge', () => {
     unsubscribe();
     bridge.dispatch({ type: 'TEST_ACTION' });
     expect(notified).toBe(false);
+  });
+
+  it('should initialize with the provided state', () => {
+    const initialState = { count: 0 };
+    const bridge = new Bridge({ initialState });
+    
+    expect(bridge.getState()).toEqual(initialState);
   });
 });
