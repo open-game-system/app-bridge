@@ -57,7 +57,7 @@ This document tracks progress toward the initial repository setup for the app-br
 
 ## Create Example Applications
 
-- [ ] Setup examples/react-app with basic implementation
+- [x] Setup examples/react-app with basic implementation
 - [ ] Setup examples/expo-app with React Native implementation
 
 ## Verify Build System
