@@ -1,8 +1,20 @@
 // Export context
-export * from './context';
+export {
+  BridgeContext,
+  useBridgeContext,
+  useBridge,
+  useAppState,
+  useAppSelector,
+} from './context';
 
 // Export hooks
-export * from './hooks';
+export {
+  useDispatch,
+  useSelector,
+  useValue,
+  useSetValue,
+  useSubscribe,
+} from './hooks';
 
 // Re-export from core for convenience
 export type {
@@ -14,5 +26,5 @@ export type {
   Selector,
 } from '@open-game-system/app-bridge';
 
-// Re-export client bridge
-export { ClientBridge } from '@open-game-system/app-bridge-client';
+// Don't re-export bridges - let users import them directly
+// This avoids issues with subpath exports

@@ -1,12 +1,12 @@
 import { createContext, useContext } from 'react';
 import { BridgeState, Selector } from '@open-game-system/app-bridge';
-import { ClientBridge } from '@open-game-system/app-bridge-client';
+import type { WebBridge } from '@open-game-system/app-bridge-web';
 
 /**
  * Context interface for the bridge
  */
 export interface BridgeContextValue {
-  bridge: ClientBridge | null;
+  bridge: WebBridge | null;
   state: BridgeState;
 }
 
@@ -33,7 +33,7 @@ export function useBridgeContext(): BridgeContextValue {
 /**
  * Hook to access the bridge instance
  */
-export function useBridge(): ClientBridge {
+export function useBridge(): WebBridge {
   const { bridge } = useBridgeContext();
 
   if (!bridge) {

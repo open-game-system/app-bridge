@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@open-game-system/app-bridge": "workspace:*",
-    "@open-game-system/app-bridge-client": "workspace:*"
+    "@open-game-system/app-bridge-web": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=16.8.0",

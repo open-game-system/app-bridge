@@ -32,12 +32,12 @@ importers:
       '@open-game-system/app-bridge':
         specifier: workspace:*
         version: link:../../packages/core
-      '@open-game-system/app-bridge-client':
-        specifier: workspace:*
-        version: link:../../packages/client
       '@open-game-system/app-bridge-react':
         specifier: workspace:*
         version: link:../../packages/react
+      '@open-game-system/app-bridge-web':
+        specifier: workspace:*
+        version: link:../../packages/web
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -106,9 +106,9 @@ importers:
       '@open-game-system/app-bridge':
         specifier: workspace:*
         version: link:../core
-      '@open-game-system/app-bridge-client':
+      '@open-game-system/app-bridge-web':
         specifier: workspace:*
-        version: link:../client
+        version: link:../web
     devDependencies:
       '@biomejs/biome':
         specifier: 1.3.3
@@ -179,6 +179,28 @@ importers:
         version: 0.30.1
 
   packages/testing:
+    dependencies:
+      '@open-game-system/app-bridge':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 1.3.3
+        version: 1.3.3
+      typescript:
+        specifier: ^5.0.4
+        version: 5.0.4
+      vite:
+        specifier: ^4.3.5
+        version: 4.3.5(@types/node@22.13.14)
+      vite-plugin-dts:
+        specifier: ^2.3.0
+        version: 2.3.0(vite@4.3.5)
+      vitest:
+        specifier: ^0.30.1
+        version: 0.30.1
+
+  packages/web:
     dependencies:
       '@open-game-system/app-bridge':
         specifier: workspace:*

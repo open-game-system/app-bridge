@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ClientBridge } from '@open-game-system/app-bridge-client';
-import {
+import { ClientBridge } from '@open-game-system/app-bridge-web';
+import { 
+  useValue, 
+  useSetValue, 
   BridgeContext,
-  useValue,
-  useSetValue,
-  useAppState,
+  useAppState
 } from '@open-game-system/app-bridge-react';
 
 // Create a bridge instance

@@ -31,8 +31,8 @@ Use the following directory structure:
 │   │           ├── index.ts
 │   │           └── produce.ts   # Immutable state updates (immer-like)
 │   │
-│   ├── client/                  # Client-side implementation
-│   │   ├── package.json         # Published as @open-game-system/app-bridge-client
+│   ├── web/                     # Web implementation
+│   │   ├── package.json         # Published as @open-game-system/app-bridge-web
 │   │   ├── tsconfig.json
 │   │   ├── vite.config.ts
 │   │   └── src/
@@ -171,17 +171,23 @@ packages:
 }
 ```
 
-### Client Package (packages/client/package.json)
+### Web Package (packages/web/package.json)
 ```json
 {
-  "name": "@open-game-system/app-bridge-client",
+  "name": "@open-game-system/app-bridge-web",
   "version": "0.1.0",
-  "description": "Client-side implementation of the OpenGame App Bridge",
+  "description": "Web implementation of the OpenGame App Bridge for browsers and server environments",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./client": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
@@ -253,7 +259,7 @@ packages:
   },
   "dependencies": {
     "@open-game-system/app-bridge": "workspace:*",
-    "@open-game-system/app-bridge-client": "workspace:*"
+    "@open-game-system/app-bridge-web": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=16.8.0",
@@ -570,16 +576,17 @@ export default defineConfig({
 }
 ```
 
-### Key Implementation Details
+## Key Implementation Details
 
 1. The core package should provide:
    - Basic store interfaces and types
    - Bridge implementation foundation
    - Utility functions (like produce for immutable updates)
 
-2. The client package handles:
-   - Web browser specific implementation
+2. The web package handles:
+   - Web browser and server-side specific implementation
    - Communication with native side
+   - Provides backward compatibility via `./client` subpath export
 
 3. The React package provides:
    - Context providers

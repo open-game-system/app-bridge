@@ -1,5 +1,5 @@
-// Export client-specific implementation
-export { ClientBridge } from './bridge';
+// Export web-specific implementation
+export { WebBridge, ClientBridge } from './bridge';
 
 // Re-export from core for convenience
 export type {

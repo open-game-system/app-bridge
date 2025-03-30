@@ -1,7 +1,7 @@
 {
-  "name": "@open-game-system/app-bridge-client",
+  "name": "@open-game-system/app-bridge-web",
   "version": "0.1.0",
-  "description": "Client-side implementation of the OpenGame App Bridge",
+  "description": "Web implementation of the OpenGame App Bridge for browsers and server environments",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -13,10 +13,17 @@
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./client": {
+      "types": "./dist/bridge.d.ts",
+      "import": "./dist/bridge.mjs",
+      "require": "./dist/bridge.js",
+      "default": "./dist/bridge.js"
+    },
     "./bridge": {
       "types": "./dist/bridge.d.ts",
       "import": "./dist/bridge.mjs",
-      "require": "./dist/bridge.js"
+      "require": "./dist/bridge.js",
+      "default": "./dist/bridge.js"
     }
   },
   "files": [

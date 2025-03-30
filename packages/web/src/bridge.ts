@@ -1,10 +1,10 @@
-import { Bridge, BridgeAction, BridgeOptions } from '@open-game-system/app-bridge';
+import { Bridge, BridgeAction, BridgeOptions, BridgeState } from '@open-game-system/app-bridge';
 import { produce } from '@open-game-system/app-bridge/utils';
 
 /**
- * Client-specific bridge implementation
+ * Web-specific bridge implementation
  */
-export class ClientBridge extends Bridge {
+export class WebBridge extends Bridge {
   /**
    * Process an action and update state accordingly
    */
@@ -69,3 +69,8 @@ export class ClientBridge extends Bridge {
     this.setState(newState);
   }
 }
+
+/**
+ * ClientBridge is an alias for WebBridge for backward compatibility
+ */
+export const ClientBridge = WebBridge;

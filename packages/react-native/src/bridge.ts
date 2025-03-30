@@ -1,5 +1,5 @@
 import { BridgeAction, BridgeOptions } from '@open-game-system/app-bridge';
-import { ClientBridge } from '@open-game-system/app-bridge-client';
+import { ClientBridge } from '@open-game-system/app-bridge-web/client';
 import { Platform } from 'react-native';
 
 /**
