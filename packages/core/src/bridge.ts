@@ -90,12 +90,12 @@ export class Bridge {
    */
   private notifyListeners(): void {
     const currentState = this.getState();
-    this.listeners.forEach((listener) => {
+    for (const listener of this.listeners) {
       try {
         listener(currentState);
       } catch (error) {
         console.error('Error in bridge listener:', error);
       }
-    });
+    }
   }
 }

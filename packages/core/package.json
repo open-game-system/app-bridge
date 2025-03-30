@@ -2,6 +2,7 @@
   "name": "@open-game-system/app-bridge",
   "version": "0.1.0",
   "description": "Core functionality for the OpenGame App Bridge",
+  "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

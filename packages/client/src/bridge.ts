@@ -1,4 +1,4 @@
-import { Bridge, BridgeAction, BridgeOptions, BridgeState } from '@open-game-system/app-bridge';
+import { Bridge, BridgeAction, BridgeOptions } from '@open-game-system/app-bridge';
 import { produce } from '@open-game-system/app-bridge/utils';
 
 /**

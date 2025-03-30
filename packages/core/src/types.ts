@@ -2,7 +2,7 @@
  * Bridge state interface
  */
 export interface BridgeState {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -10,7 +10,7 @@ export interface BridgeState {
  */
 export interface BridgeAction {
   type: string;
-  payload?: any;
+  payload?: unknown;
 }
 
 /**
@@ -29,7 +29,7 @@ export type Selector<T> = (state: BridgeState) => T;
 export type BridgeMiddleware = (
   action: BridgeAction,
   state: BridgeState
-) => BridgeAction | null | void;
+) => BridgeAction | null | undefined;
 
 /**
  * Bridge options interface

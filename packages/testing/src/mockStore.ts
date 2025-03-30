@@ -72,13 +72,13 @@ export class MockStore {
    */
   private notifyListeners(): void {
     const currentState = this.getState();
-    this.listeners.forEach((listener) => {
+    for (const listener of this.listeners) {
       try {
         listener(currentState);
       } catch (error) {
         console.error('Error in mock store listener:', error);
       }
-    });
+    }
   }
 
   /**

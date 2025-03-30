@@ -2,6 +2,7 @@
   "name": "@open-game-system/app-bridge-react-native",
   "version": "0.1.0",
   "description": "React Native integration for the OpenGame App Bridge",
+  "type": "module",
   "main": "lib/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
