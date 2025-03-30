@@ -36,6 +36,38 @@ pnpm dev
 pnpm test
 ```
 
+## Verifying Setup
+
+To verify that your local setup is working correctly, you can run the verification script:
+
+```bash
+./scripts/verify-setup.sh
+```
+
+This script will:
+1. Check that pnpm is installed
+2. Install all dependencies
+3. Run the linter
+4. Build all packages
+5. Run tests
+6. Build the example React app
+
+Alternatively, you can follow the CI workflow defined in `.github/workflows/ci.yml` which runs the same verification steps in a GitHub Actions environment.
+
+## Examples
+
+The monorepo includes example applications:
+
+- `examples/react-app`: A basic React application that demonstrates how to use the app-bridge with React
+
+To run the React example:
+
+```bash
+cd examples/react-app
+pnpm install
+pnpm dev
+```
+
 ## License
 
 [MIT](LICENSE) 
