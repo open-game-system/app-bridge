@@ -36,10 +36,10 @@ This document tracks progress toward the initial repository setup for the app-br
 
 ## Setup React Package
 
-- [ ] Create directory structure for packages/react
-- [ ] Add package.json with dependencies and exports
-- [ ] Create tsconfig.json and vite.config.ts
-- [ ] Implement React specific hooks and context
+- [x] Create directory structure for packages/react
+- [x] Add package.json with dependencies and exports
+- [x] Create tsconfig.json and vite.config.ts
+- [x] Implement React specific hooks and context
 
 ## Setup React Native Package
 
