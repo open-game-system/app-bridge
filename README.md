@@ -12,8 +12,8 @@ A universal bridge that connects web games and the OpenGame App through a shared
 
 This monorepo contains the following packages:
 
-- `@open-game-system/app-bridge`: Core functionality
-- `@open-game-system/app-bridge-client`: Client-side implementation
+- `@open-game-system/app-bridge`: Core functionality and base implementations
+- `@open-game-system/app-bridge-web`: Web-specific implementation
 - `@open-game-system/app-bridge-react`: React integration
 - `@open-game-system/app-bridge-react-native`: React Native integration
 - `@open-game-system/app-bridge-testing`: Testing utilities

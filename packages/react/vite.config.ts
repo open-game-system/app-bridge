@@ -18,7 +18,7 @@ export default defineConfig({
         'react',
         'react-dom',
         '@open-game-system/app-bridge',
-        '@open-game-system/app-bridge-client',
+        '@open-game-system/app-bridge-web',
       ],
     },
     sourcemap: true,

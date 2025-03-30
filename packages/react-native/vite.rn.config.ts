@@ -21,7 +21,7 @@ export default defineConfig({
         'react-native',
         'expo',
         '@open-game-system/app-bridge',
-        '@open-game-system/app-bridge-client',
+        '@open-game-system/app-bridge-web',
         '@open-game-system/app-bridge-react',
         /^@open-game-system\/app-bridge/,
       ],
