@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BridgeState, Selector } from '@open-game-system/app-bridge';
+import { BridgeAction, BridgeState, Selector } from '@open-game-system/app-bridge';
 import { useBridge, useAppState } from './context';
 
 /**
@@ -32,7 +32,7 @@ export function useSelector<T>(selector: Selector<T>): T {
   
   useEffect(() => {
     // Subscribe to changes
-    const unsubscribe = bridge.subscribe((state) => {
+    const unsubscribe = bridge.subscribe((state: BridgeState) => {
       const newSelectedValue = selector(state);
       setSelectedValue(newSelectedValue);
     });
@@ -50,7 +50,7 @@ export function useSelector<T>(selector: Selector<T>): T {
 export function useDispatch() {
   const bridge = useBridge();
   
-  return useCallback((action) => {
+  return useCallback((action: BridgeAction) => {
     bridge.dispatch(action);
   }, [bridge]);
 }

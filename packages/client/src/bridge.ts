@@ -19,7 +19,7 @@ export class ClientBridge extends Bridge {
       case 'UPDATE_STATE':
         if (action.payload && typeof action.payload === 'object') {
           const currentState = this.getState();
-          const newState = produce(currentState, draft => {
+          const newState = produce(currentState, (draft: BridgeState) => {
             Object.assign(draft, action.payload);
           });
           this.setState(newState);
@@ -56,7 +56,7 @@ export class ClientBridge extends Bridge {
    */
   clearValue(key: string): void {
     const state = this.getState();
-    const newState = produce(state, draft => {
+    const newState = produce(state, (draft: BridgeState) => {
       delete draft[key];
     });
     this.setState(newState);

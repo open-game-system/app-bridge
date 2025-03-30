@@ -16,7 +16,7 @@ export class RNBridge extends ClientBridge {
   /**
    * Process an action for React Native
    */
-  protected override processAction(action: BridgeAction): void {
+  protected processAction(action: BridgeAction): void {
     // Add RN-specific action handling here if needed
     // For now, just delegate to the client bridge
     super.processAction(action);
