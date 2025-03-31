@@ -1,22 +1,16 @@
 {
-  "name": "@open-game-system/app-bridge-monorepo",
-  "version": "0.0.0",
+  "name": "app-bridge-monorepo",
   "private": true,
-  "type": "module",
   "scripts": {
-    "build": "pnpm -r build",
-    "dev": "pnpm -r dev",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage",
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.26.1",
-    "typescript": "^5.0.4",
-    "vite": "^4.3.5",
-    "vite-plugin-dts": "^2.3.0",
-    "vitest": "^0.30.1"
+    "turbo": "^1.12.2",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
   }
-}
+} 

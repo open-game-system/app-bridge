@@ -1,24 +1,56 @@
-# @open-game-system/app-bridge
+# 🌉 @open-game-system/app-bridge
 
 A universal bridge that connects web games and the OpenGame App through a shared state store.
 
-## Features
+## ✨ Features
 
-- Cross-platform compatibility (Web, React, React Native/Expo, Server)
-- Unified state management between web games and native applications
-- Simple and intuitive API for state updates and subscriptions
+- 🌐 Cross-platform compatibility (Web, React, React Native, Server)
+- 🔄 Unified state management between web games and native applications
+- 🎮 Simple and intuitive API for state updates and subscriptions
+- 🧪 Testing utilities for mocking bridges and stores
 
-## Packages
+## 📦 Installation
 
-This monorepo contains the following packages:
+```bash
+# NPM
+npm install @open-game-system/app-bridge
 
-- `@open-game-system/app-bridge`: Core functionality and base implementations
-- `@open-game-system/app-bridge-web`: Web-specific implementation
-- `@open-game-system/app-bridge-react`: React integration
-- `@open-game-system/app-bridge-react-native`: React Native integration
-- `@open-game-system/app-bridge-testing`: Testing utilities
+# Yarn
+yarn add @open-game-system/app-bridge
 
-## Development
+# PNPM
+pnpm add @open-game-system/app-bridge
+```
+
+## 🚀 Usage
+
+The package provides different exports for different environments:
+
+```typescript
+// Core functionality and types
+import { createBridge, type Store, type Bridge } from '@open-game-system/app-bridge';
+
+// Web-specific implementation
+import { createWebBridge } from '@open-game-system/app-bridge/web';
+
+// React integration with hooks and context
+import { createBridgeContext } from '@open-game-system/app-bridge/react';
+
+// React Native integration
+import { createNativeBridge } from '@open-game-system/app-bridge/native';
+
+// Testing utilities
+import { createMockNativeBridge } from '@open-game-system/app-bridge/testing';
+```
+
+## 📚 Documentation
+
+- 🏗️ [Architecture Overview](docs/ARCHITECTURE.md)
+- 📖 [Core Concepts](docs/CONCEPTS.md)
+- 🧪 [Testing Strategies](docs/TESTING_STRATEGIES.md)
+- 🤝 [Contributing Guide](docs/CONTRIBUTING.md)
+
+## 🛠️ Development
 
 This project uses pnpm as the package manager:
 
@@ -26,7 +58,7 @@ This project uses pnpm as the package manager:
 # Install dependencies
 pnpm install
 
-# Build all packages
+# Build the package
 pnpm build
 
 # Development mode
@@ -36,29 +68,12 @@ pnpm dev
 pnpm test
 ```
 
-## Verifying Setup
-
-To verify that your local setup is working correctly, you can run the verification script:
-
-```bash
-./scripts/verify-setup.sh
-```
-
-This script will:
-1. Check that pnpm is installed
-2. Install all dependencies
-3. Run the linter
-4. Build all packages
-5. Run tests
-6. Build the example React app
-
-Alternatively, you can follow the CI workflow defined in `.github/workflows/ci.yml` which runs the same verification steps in a GitHub Actions environment.
-
-## Examples
+## 📱 Examples
 
 The monorepo includes example applications:
 
-- `examples/react-app`: A basic React application that demonstrates how to use the app-bridge with React
+- 🎯 `examples/react-app`: A basic React application that demonstrates how to use the app-bridge with React
+- 📱 `examples/react-native-app`: A React Native application that demonstrates native integration
 
 To run the React example:
 
@@ -68,72 +83,42 @@ pnpm install
 pnpm dev
 ```
 
-## License
+To run the React Native example:
 
-[MIT](LICENSE)
-
-# Expo App Example for OpenGame App Bridge
-
-This is an example Expo application that demonstrates the usage of the OpenGame App Bridge in a React Native environment.
-
-## Features
-
-- Integration with the OpenGame App Bridge
-- Example of state management in React Native
-- Counter demonstration with increment/decrement functionality
-- List management example
-
-## Running the Application
-
-1. Make sure you have the Expo CLI installed:
-   ```
-   npm install -g expo-cli
-   ```
-
-2. Install dependencies:
-   ```
-   pnpm install
-   ```
-
-3. Start the development server:
-   ```
-   pnpm start
-   ```
-
-4. Use the Expo Go app on your mobile device to scan the QR code, or run in a simulator/emulator.
-
-## Project Structure
-
-- `App.tsx` - Main application component using the App Bridge
-- `index.js` - Entry point for Expo
-- `app.json` - Expo configuration
-
-## How It Works
-
-This example uses Babel's module resolver plugin to directly import from the source files of each package in the monorepo. This approach has several advantages:
-
-1. No need for complex Metro configuration
-2. No need for scripts to copy or build packages
-3. Changes to source files are immediately reflected in the Expo app
-
-The babel.config.js file maps import paths from the published package names to their source locations:
-
-```js
-// Example path mapping
-alias: {
-  '@open-game-system/app-bridge': '../../packages/core/src',
-  '@open-game-system/app-bridge-react': '../../packages/react/src',
-  // ...other aliases
-}
+```bash
+cd examples/react-native-app
+pnpm install
+pnpm start
 ```
 
-This approach is used by many popular React Native libraries that support monorepos.
+## 🧪 Testing
 
-## Notes on Web Support
+The testing utilities provide mocks for testing applications that use the App Bridge:
 
-The web support for this example requires additional configuration. Currently, there are some dependency issues when building for web. If you need web support, you may need to:
+```typescript
+import { createMockNativeBridge } from '@open-game-system/app-bridge/testing';
 
-1. Use a specific version of react-native-web compatible with Expo 48
-2. Install additional dependencies such as `styleq` with the right version
+// Create a mock bridge for testing
+const mockBridge = createMockNativeBridge<AppStores>({
+  isSupported: true,
+  stores: {
+    counter: {
+      initialState: { count: 0 }
+    }
+  }
+});
 
-For development purposes, it's recommended to use the native (iOS/Android) targets. 
+// Use in tests
+test('Counter updates correctly', async () => {
+  const store = await mockBridge.getStore('counter');
+  expect(store.getState().count).toBe(0);
+  
+  await mockBridge.produce('counter', draft => {
+    draft.count += 1;
+  });
+  
+  expect(store.getState().count).toBe(1);
+});
+```
+
+For more details on testing strategies, see [docs/TESTING_STRATEGIES.md](docs/TESTING_STRATEGIES.md). 

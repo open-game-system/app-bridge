@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "OpenGame App Bridge Example",
+    "name": "App Bridge Example",
     "slug": "app-bridge-example",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,16 +15,18 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.opengamesystem.appbridgeexample"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.opengamesystem.appbridgeexample"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     }
   }
-} 
+}

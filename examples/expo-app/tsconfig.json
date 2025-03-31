@@ -2,12 +2,25 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "jsx": "react-native",
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "moduleResolution": "node16",
-    "module": "Node16",
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
-  }
-} 
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-native",
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"],
+      "@open-game-system/app-bridge": ["../../packages/app-bridge/src"],
+      "@open-game-system/app-bridge/native": ["../../packages/app-bridge/src/native"]
+    },
+    "types": ["react", "react-native", "jest", "node"],
+    "allowJs": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "esnext",
+    "lib": ["esnext"]
+  },
+  "include": ["App.tsx", "index.js"],
+  "exclude": ["node_modules"]
+}
