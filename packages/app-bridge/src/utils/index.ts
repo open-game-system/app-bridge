@@ -1,5 +1,5 @@
 import { produce as immerProduce, type Draft } from 'immer';
-import type { Event, State, Store, StoreDefinition } from '../types';
+import type { Event, State } from '../types';
 
 /**
  * A wrapper around Immer's produce that maintains type safety
@@ -25,43 +25,6 @@ export function isEvent(value: unknown): value is Event {
  */
 export function isState(value: unknown): value is State {
   return typeof value === 'object' && value !== null;
-}
-
-/**
- * Type guard to check if an object is a valid Store
- */
-export function isStore<S extends State = State, E extends Event = Event>(
-  value: unknown
-): value is Store<S, E> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'getState' in value &&
-    'dispatch' in value &&
-    'subscribe' in value &&
-    typeof (value as Store<S, E>).getState === 'function' &&
-    typeof (value as Store<S, E>).dispatch === 'function' &&
-    typeof (value as Store<S, E>).subscribe === 'function'
-  );
-}
-
-/**
- * Type guard to check if an object is a valid StoreDefinition
- */
-export function isStoreDefinition<S extends State = State, E extends Event = Event>(
-  value: unknown
-): value is StoreDefinition<S, E> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'initialState' in value &&
-    isState((value as StoreDefinition<S, E>).initialState) &&
-    (!('reducers' in value) ||
-      (typeof (value as StoreDefinition<S, E>).reducers === 'object' &&
-        Object.values((value as StoreDefinition<S, E>).reducers || {}).every(
-          (reducer) => typeof reducer === 'function'
-        )))
-  );
 }
 
 /**

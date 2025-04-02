@@ -1,77 +1,168 @@
-# OpenGame App Bridge Architecture
+# 🏗️ Architecture
 
-This document provides a high-level overview of the architecture for the `@open-game-system/app-bridge` library suite.
+## Overview
 
-## Goals
+The app-bridge package provides a type-safe bridge between web games and the OpenGame App. It manages state and events across the bridge boundary, ensuring type safety and proper initialization.
 
-- Provide a unified way to manage shared state between a native host application (React Native) and embedded web applications (WebViews).
-- Offer distinct but compatible interfaces for native and web environments.
-- Ensure type safety across the bridge using TypeScript.
-- Isolate state management per feature using unique keys.
-- Enable efficient state synchronization.
+## System Design
 
-## Core Concepts
+### Core Components
 
-1.  **Bridge:** The central coordinator for communication and state.
-2.  **Stores:** Keyed, feature-specific state containers. Each store has its own state and defined event types (`StoreDefinition`).
-3.  **Native Bridge:** The implementation running in the React Native host application. It holds the canonical state and processes state-changing events using reducers.
-4.  **Web Bridge:** The implementation running within the WebView. It receives state updates from the native bridge and sends events to it.
-5.  **Synchronization:** State changes are synchronized from the native side to connected web views. The current mechanism relies on sending full state snapshots upon change, but could potentially be optimized with JSON patches in the future.
-6.  **TypeScript-First:** The library focuses on providing strong types and interfaces, allowing consumers to rely on contracts rather than specific implementations.
+```mermaid
+graph TD
+    subgraph Web App
+        RC[React Components]
+        SC[Store Contexts]
+        WB[Web Bridge]
+    end
 
-## Package Breakdown
+    subgraph Native App
+        WV1[WebView 1]
+        WV2[WebView 2]
+        NB[Native Bridge]
+        NS[Native Stores]
+    end
 
--   **`packages/core` (`@open-game-system/app-bridge`)**: Defines the fundamental types and interfaces (`Store`, `StoreDefinition`, `BridgeStores`, `Bridge`, `NativeBridge`) and core utilities like `produce`. It establishes the contract that other packages implement.
--   **`packages/web` (`@open-game-system/app-bridge-web`)**: Provides the `createWebBridge` function. This bridge runs inside the WebView, communicates with the native host (usually via `window.ReactNativeWebView.postMessage`), subscribes to state updates, and dispatches events back to the native side.
--   **`packages/react` (`@open-game-system/app-bridge-react`)**: Offers React integration components and hooks. It provides `createBridgeContext` to manage the bridge instance and `createStoreContext` to create type-safe contexts for individual stores. This layer simplifies interacting with the bridge and stores in React components.
--   **`packages/react-native` (`@open-game-system/app-bridge-react-native`)**: Provides the `createNativeBridge` function. This bridge runs in the React Native host application. It manages the actual state, applies reducers to handle events dispatched from web views or the native side, and sends state updates to connected WebViews. It also exposes the `produce` method for direct, type-safe state mutations on the native side.
--   **`packages/testing` (`@open-game-system/app-bridge-testing`)**: Contains utilities (`createMockBridge`, `createMockNativeBridge`, `createMockStore`) for testing components and applications that use the app-bridge, allowing for isolation and controlled testing environments.
+    RC --> SC
+    SC --> WB
+    WB --> WV1
+    WB --> WV2
+    WV1 --> NB
+    WV2 --> NB
+    NB --> NS
+    NS --> NB
+    NB --> WV1
+    NB --> WV2
+    WV1 --> WB
+    WV2 --> WB
+```
 
-## Communication Flow
+### Communication Protocol
 
 ```mermaid
 sequenceDiagram
-    participant WebApp as Web Application (WebView)
-    participant WebBridge as Web Bridge
-    participant NativeBridge as Native Bridge (Host)
-    participant NativeState as Canonical State
+    participant RC as React Component
+    participant SC as Store Context
+    participant WB as Web Bridge
+    participant WV as WebView
+    participant NB as Native Bridge
+    participant NS as Native Store
 
-    Note over WebApp, NativeState: Initialization
-    NativeBridge->>NativeState: Initialize with initialState & reducers
-    WebApp->>WebBridge: createWebBridge()
-    WebBridge->>NativeBridge: Handshake / Connection Request
-    activate NativeBridge
-    NativeBridge-->>WebBridge: Connection Acknowledged
-    deactivate NativeBridge
-    NativeBridge->>NativeState: Get current full state
-    NativeState-->>NativeBridge: Current State
-    NativeBridge->>WebBridge: Initial State Sync
-    WebBridge->>WebApp: Bridge ready / Stores available
+    Note over WV: WebView Registration
+    WV->>NB: registerWebView
+    NB->>WV: injectJavaScript
+    NB->>NS: Get Initial State
+    NS-->>NB: Initial State
+    NB-->>WV: Send Initial State
 
-    Note over WebApp, NativeState: Web Dispatching Event
-    WebApp->>WebBridge: store.dispatch(event)
-    WebBridge->>NativeBridge: postMessage(event)
-    activate NativeBridge
-    NativeBridge->>NativeState: Apply reducer for event
-    NativeState-->>NativeBridge: New State
-    NativeBridge->>WebBridge: State Update Sync (New State)
-    deactivate NativeBridge
-    WebBridge->>WebApp: Notify store subscribers
-
-    Note over WebApp, NativeState: Native Updating State (e.g., via produce)
-    NativeBridge->>NativeState: produce(key, recipe)
-    NativeState-->>NativeBridge: New State
-    NativeBridge->>WebBridge: State Update Sync (New State)
-    WebBridge->>WebApp: Notify store subscribers
+    Note over RC,WV: State Updates
+    RC->>SC: Dispatch Event
+    SC->>WB: dispatch
+    WB->>WV: postMessage
+    WV->>NB: onMessage
+    NB->>NS: Update State
+    NS-->>NB: State Updated
+    NB-->>WV: injectJavaScript
+    WV-->>WB: State Update
+    WB-->>SC: State Update
+    SC-->>RC: Re-render
 ```
 
-1.  **Initialization:** The Native Bridge is created with initial state and reducers. The Web Bridge is created in the WebView and establishes a connection with the Native Bridge. The Native Bridge sends the initial state to the Web Bridge.
-2.  **Web Event:** The Web App dispatches an event via a store. The Web Bridge sends this event to the Native Bridge. The Native Bridge applies the corresponding reducer, updates the canonical state, and sends the new state back to the Web Bridge.
-3.  **Native Update:** The Native App directly updates state using `produce`. The Native Bridge updates the canonical state and sends the new state to the Web Bridge.
-4.  **Notification:** In both update scenarios, the Web Bridge receives the new state and notifies its store subscribers, causing React components to re-render.
+### Store Initialization Flow
 
-## Future Considerations
+```mermaid
+sequenceDiagram
+    participant App as App
+    participant WV as WebView
+    participant NB as Native Bridge
+    participant NS as Native Store
 
--   **Optimization:** Explore using JSON patches instead of sending the full state on every update, especially for large states.
--   **Error Handling:** Define more robust error handling and reporting mechanisms between the bridges.
--   **Bi-directional `produce`:** Consider if allowing `produce`-like updates initiated from the web side is desirable or feasible. 
+    App->>WV: Create WebView
+    WV->>NB: registerWebView
+    NB->>WV: Inject JavaScript
+    NB->>NS: Initialize Stores
+    NS-->>NB: Initial State
+    NB-->>WV: Send Initial State
+    WV-->>App: Ready
+```
+
+## Implementation Details
+
+### Bridge Implementation
+
+The bridge is implemented as a state management system that:
+
+1. Manages store initialization
+2. Handles bi-directional communication through WebView
+3. Provides type-safe event dispatch
+4. Maintains store state consistency
+
+### WebView Integration
+
+The WebView integration provides:
+
+1. **Registration**
+   - Native app registers WebView with bridge
+   - Bridge injects necessary JavaScript
+   - Bridge sets up message handlers
+
+2. **Message Passing**
+   - Web side sends events via `postMessage`
+   - Native side receives events via `onMessage`
+   - Native side sends state updates via `injectJavaScript`
+
+3. **State Synchronization**
+   - Native side maintains source of truth
+   - State updates are sent to web via WebView
+   - Web side reflects state changes in UI
+
+### React Integration
+
+The React integration provides:
+
+1. Context-based store access
+2. Type-safe hooks for state and events
+3. Initialization state handling
+4. Support state management
+
+### Error Handling
+
+The system implements a layered error handling approach:
+
+1. **Bridge Level**
+   - Connection errors
+   - Communication failures
+   - State synchronization errors
+
+2. **Store Level**
+   - Initialization errors
+   - State update failures
+   - Event processing errors
+
+3. **React Level**
+   - Hook usage errors (when hooks are used outside of providers)
+   - Context errors
+   - Component rendering errors
+
+## Testing Architecture
+
+```mermaid
+graph TD
+    subgraph Test Environment
+        TC[Test Component]
+        MC[Mock Bridge]
+        MS[Mock Store]
+    end
+
+    TC --> MC
+    MC --> MS
+    MS --> MC
+    MC --> TC
+```
+
+The testing architecture provides:
+
+1. Mock bridge implementation
+2. Configurable store state
+3. Event simulation
+4. State verification 

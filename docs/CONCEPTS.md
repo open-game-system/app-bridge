@@ -1,80 +1,279 @@
-# Core Concepts
+# 🎯 Core Concepts
 
-This document explains the fundamental concepts behind the OpenGame App Bridge library.
+## Bridge Pattern
 
-## 1. TypeScript-First Approach
+The app-bridge package implements a bridge pattern to manage state and events between web games and the OpenGame App. This pattern provides:
 
-This library adopts a "TypeScript-First" philosophy. The primary public contract is defined by its strong TypeScript types and interfaces. The goal is to provide the best possible type safety and developer experience for consumers using TypeScript.
+1. Type-safe communication
+2. State synchronization
+3. Event handling
+4. Initialization management
 
-**How it works in practice:**
+```mermaid
+graph LR
+    subgraph Web App
+        W[Web Components]
+        WB[Web Bridge]
+    end
 
--   **Source as the Contract:** The `.ts` source files and the interfaces/types they export are the definitive API.
--   **Flexible Consumption:**
-    -   **Direct Source Integration (Recommended for Monorepos):** Consumers can configure their build systems to resolve package imports directly to the TypeScript source files within the monorepo. This provides the tightest integration and avoids potential type mismatches. *This is the approach used in the `examples/expo-app` via `babel-plugin-module-resolver`.*
-    -   **Standard Build Output:** Each package still includes a standard build process (`pnpm build`) that generates JavaScript (`.js`, `.mjs`) and type definition (`.d.ts`) files. These are necessary for publishing to npm and for consumption by projects that don't integrate the source directly.
+    subgraph Native App
+        WV[WebView]
+        NB[Native Bridge]
+        N[Native Components]
+    end
 
-**Benefits:**
+    W --> WB
+    WB --> WV
+    WV --> NB
+    NB --> N
+    NB --> WV
+    WV --> WB
+```
 
--   **Enhanced Type Safety:** Maximizes TypeScript's benefits.
--   **Improved Developer Experience:** Richer IntelliSense, easier refactoring.
--   **Clear Contracts:** Interfaces define *what* the bridge does, decoupling consumers from implementation details.
+## Type System
 
-**Considerations:**
+The type system ensures type safety across the bridge:
 
--   **Direct Source Integration Setup:** Consuming source directly requires build tool configuration (like Babel plugins or tsconfig paths) to handle module resolution within the monorepo.
--   **Build Step for Distribution:** A build step is still necessary within each package to create distributable artifacts for publishing or broader use.
+```typescript
+// shared/types.ts
+export interface CounterState {
+  value: number;
+}
 
-## 2. Bridge Pattern
+export type CounterEvents = 
+  | { type: "INCREMENT" }
+  | { type: "DECREMENT" }
+  | { type: "SET"; value: number };
 
-The library employs a variation of the Bridge design pattern. The core idea is to decouple an abstraction (the concept of a shared, synchronized state store) from its multiple implementations (native environment vs. web environment).
+export type AppStores = {
+  counter: {
+    state: CounterState;
+    events: CounterEvents;
+  };
+};
+```
 
--   **Abstraction:** Defined by the core interfaces in `packages/core`: `Store`, `Bridge`, `NativeBridge`.
--   **Implementations:**
-    -   `NativeBridge` (in `packages/react-native`): The "host" or "source of truth" implementation.
-    -   `WebBridge` (in `packages/web`): The "client" implementation that mirrors the state held by the native side.
+## WebView Integration
 
-This pattern allows both the native application and the web application to interact with the "bridge" concept through interfaces appropriate to their context, without needing to know the intricate details of the cross-environment communication. `packages/react` further builds on this by providing a React-specific layer over the `WebBridge`.
+The bridge uses React Native's WebView for communication between web and native:
 
-## 3. Store Isolation (Key-Based Features)
+```typescript
+// In React Native app
+function GameWebView() {
+  const webViewRef = useRef<WebView>(null);
 
-Instead of a single monolithic state object, the bridge manages multiple independent "stores," each identified by a unique string key. This promotes modularity and separation of concerns.
+  useEffect(() => {
+    // Register the WebView with the bridge
+    bridge.registerWebView(webViewRef.current);
+  }, []);
 
--   **`StoreDefinition`:** Each feature defines its state shape and the types of events it handles.
--   **`BridgeStores`:** A central type aggregates all `StoreDefinition`s, mapping keys to their respective definitions.
--   **Access:** Both native and web sides access stores using these keys (e.g., `bridge.getStore('myFeature')`).
+  return (
+    <WebView
+      ref={webViewRef}
+      source={{ uri: 'https://your-game-url.com' }}
+      onMessage={(event) => {
+        // Handle messages from the web side
+        bridge.handleWebMessage(event.nativeEvent.data);
+      }}
+      injectedJavaScript={bridge.getInjectedJavaScript()}
+    />
+  );
+}
+```
 
-This design prevents different features from accidentally interfering with each other's state and makes the overall state structure easier to manage as the application grows.
+The integration works in three steps:
 
-## 4. React Context Integration
+1. **WebView Registration**
+   - Native app registers the WebView with the bridge
+   - Bridge injects necessary JavaScript into the WebView
+   - Bridge sets up message handlers
 
-`packages/react` provides a convenient and type-safe way to integrate the bridge and its stores into React applications using the context API.
+2. **Message Passing**
+   - Web side sends events via `postMessage`
+   - Native side receives events via `onMessage`
+   - Native side sends state updates via `injectJavaScript`
 
--   **`createBridgeContext<AppStores>()`:** This factory function is the main entry point. It takes your application's `BridgeStores` type as a generic argument.
-    -   It returns a `BridgeContext` object containing:
-        -   `Provider`: Wraps your application (or relevant part) to manage the underlying bridge instance.
-        -   `useBridge`: Hook to access the bridge instance directly.
-        -   `Supported`/`Unsupported`: Components to conditionally render UI based on bridge availability.
-        -   `createStoreContext`: A *method* on the `BridgeContext` object.
--   **`BridgeContext.createStoreContext('storeKey')`:** Called with a specific store key (e.g., `'counter'`).
-    -   It returns a `StoreContext` specific to that feature store (e.g., `CounterContext`).
-    -   This `StoreContext` contains:
-        -   `useStore`: Hook to get the store instance (safe only within `Initialized`).
-        -   `useSelector`: Hook to subscribe to parts of the store's state (safe only within `Initialized`).
-        -   `Initializing`/`Initialized`: Components to handle the store's loading and ready states, ensuring hooks are used safely.
+3. **State Synchronization**
+   - Native side maintains source of truth
+   - State updates are sent to web via WebView
+   - Web side reflects state changes in UI
 
-This two-step context creation (`createBridgeContext` then `createStoreContext`) ensures that all parts of the system are correctly typed according to the top-level `AppStores` definition, providing end-to-end type safety from bridge creation down to component-level state selection.
+## Store Management
 
-## 5. Native vs. Web Responsibilities
+Stores are the core building blocks for state management. Each store has two states:
 
--   **Native Side (`NativeBridge`):**
-    -   **Source of Truth:** Holds the canonical application state.
-    -   **State Updates:** Responsible for *applying* state changes based on events (using reducers) or direct mutations (using `produce`).
-    -   **Synchronization:** Sends state updates to connected WebViews.
-    -   **Event Handling:** Receives events dispatched from WebViews.
--   **Web Side (`WebBridge`):**
-    -   **State Mirror:** Receives and holds a synchronized copy of the state from the native side.
-    -   **Event Dispatch:** Sends events initiated by the web application to the native side for processing.
-    -   **Subscriptions:** Allows web application components to subscribe to state changes.
-    -   **Environment Detection:** Determines if it's running within a compatible native host.
+1. **Uninitialized**: Store is not yet ready (state is null)
+2. **Initialized**: Store is ready for use (state has a value)
 
-This separation ensures a clear flow of data: state flows *from* native *to* web, and events flow *from* web *to* native (or originate natively). 
+```mermaid
+stateDiagram-v2
+    [*] --> Uninitialized
+    Uninitialized --> Initialized: setState(value)
+    Initialized --> Initialized: Update State
+    Initialized --> Uninitialized: setState(null)
+    Initialized --> Initialized: setState(value)
+```
+
+### Store Initialization
+
+Store initialization is handled by the React Native host application:
+
+```typescript
+// In React Native app
+const bridge = createNativeBridge<AppStores>({
+  stores: {
+    counter: {
+      initialState: { value: 0 },
+      reducers: {
+        INCREMENT: (state) => {
+          state.value += 1;
+        }
+      }
+    }
+  }
+});
+
+// Initialize stores when ready
+bridge.setState('counter', { value: 0 }); // Initialize store
+bridge.setState('counter', null); // Uninitialize store
+```
+
+## State Updates
+
+State updates can happen in two ways:
+
+1. **From Native Side**
+   ```typescript
+   // Direct state updates in native app
+   bridge.produce('counter', draft => {
+     draft.value += 1;
+   });
+
+   // Set state directly
+   bridge.setState('counter', { value: 42 });
+
+   // ⚠️ Warning: produce will throw in development if store is not initialized
+   bridge.produce('uninitializedStore', draft => {
+     draft.value += 1; // Throws in dev, warns in prod
+   });
+   ```
+
+2. **From Web Side**
+   ```typescript
+   // In web app (WebView)
+   webBridge.dispatch('counter', { type: 'INCREMENT' });
+   
+   // Native bridge handles the event
+   const nativeBridge = createNativeBridge<AppStores>({
+     stores: {
+       counter: {
+         initialState: { value: 0 },
+         reducers: {
+           INCREMENT: (state) => {
+             state.value += 1;
+           }
+         }
+       }
+     }
+   });
+   ```
+
+## React Integration
+
+The React integration provides hooks and context for easy state management:
+
+```typescript
+// Create store context
+const CounterContext = BridgeContext.createStoreContext('counter');
+
+// Use in components
+function Counter() {
+  const value = CounterContext.useSelector(state => state.value);
+  const dispatch = CounterContext.useDispatch();
+
+  return (
+    <div>
+      <p>Count: {value}</p>
+      <button onClick={() => dispatch({ type: "INCREMENT" })}>+</button>
+    </div>
+  );
+}
+
+// Handle initialization states
+function App() {
+  return (
+    <BridgeContext.Supported>
+      <CounterContext.Initializing>
+        <div>Loading...</div>
+      </CounterContext.Initializing>
+      <CounterContext.Initialized>
+        <Counter />
+      </CounterContext.Initialized>
+    </BridgeContext.Supported>
+  );
+}
+```
+
+## Testing
+
+Testing with the bridge requires:
+
+1. Mock bridge setup
+2. State verification
+3. Event simulation
+4. Component testing
+
+```typescript
+// Create mock bridge
+const mockBridge = createMockBridge<AppStores>({
+  stores: {
+    counter: {
+      initialState: { value: 0 },
+      reducers: {
+        INCREMENT: (state) => {
+          state.value += 1;
+        }
+      }
+    }
+  }
+});
+
+// Test component
+test('Counter updates correctly', () => {
+  render(
+    <BridgeContext.Provider bridge={mockBridge}>
+      <CounterContext.Initialized>
+        <CounterComponent />
+      </CounterContext.Initialized>
+    </BridgeContext.Provider>
+  );
+
+  fireEvent.click(screen.getByText('+'));
+  expect(screen.getByText('Count: 1')).toBeInTheDocument();
+});
+```
+
+## Best Practices
+
+1. **Type Safety**
+   - Use shared types between web and native
+   - Leverage TypeScript's type system
+   - Keep types in a shared location
+
+2. **State Management**
+   - Initialize stores when ready
+   - Handle uninitialized states
+   - Use immer-style updates
+   - Keep reducers pure
+
+3. **React Integration**
+   - Use context providers
+   - Handle initialization states
+   - Use selectors for performance
+   - Keep components focused
+
+4. **Testing**
+   - Use mock bridge
+   - Test initialization states
+   - Test error cases
+   - Keep tests focused

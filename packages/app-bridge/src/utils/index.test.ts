@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { produce, isEvent, isState, isStore, isStoreDefinition, delay, retryWithBackoff } from './index';
-import type { State } from '../types';
+import { produce, isEvent, isState, delay, retryWithBackoff } from './index';
+import type { State, Event } from '../types';
+
+interface CounterState extends State {
+  count: number;
+}
 
 describe('Utility Functions', () => {
   describe('Type Guards', () => {
@@ -27,45 +31,6 @@ describe('Utility Functions', () => {
         expect(isState(null)).toBe(false);
         expect(isState(undefined)).toBe(false);
         expect(isState('string')).toBe(false);
-      });
-    });
-
-    describe('isStore', () => {
-      it('should return true for valid stores', () => {
-        const validStore = {
-          getState: () => ({}),
-          dispatch: () => {},
-          subscribe: () => () => {},
-        };
-        expect(isStore(validStore)).toBe(true);
-      });
-
-      it('should return false for invalid stores', () => {
-        expect(isStore(null)).toBe(false);
-        expect(isStore({})).toBe(false);
-        expect(isStore({ getState: 'not a function' })).toBe(false);
-      });
-    });
-
-    describe('isStoreDefinition', () => {
-      it('should return true for valid store definitions', () => {
-        const validDef = {
-          initialState: { count: 0 },
-        };
-        const validDefWithReducers = {
-          initialState: { count: 0 },
-          reducers: {
-            increment: (state: State) => ({ ...state, count: (state as any).count + 1 }),
-          },
-        };
-        expect(isStoreDefinition(validDef)).toBe(true);
-        expect(isStoreDefinition(validDefWithReducers)).toBe(true);
-      });
-
-      it('should return false for invalid store definitions', () => {
-        expect(isStoreDefinition(null)).toBe(false);
-        expect(isStoreDefinition({})).toBe(false);
-        expect(isStoreDefinition({ initialState: null })).toBe(false);
       });
     });
   });

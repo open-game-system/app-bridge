@@ -1,45 +1,431 @@
-# Testing Strategies
+# 🧪 Testing Strategies
 
-Testing applications that use `@open-game-system/app-bridge` involves verifying both the individual components and their interaction with the bridge and stores. The `packages/testing` module provides utilities to facilitate this.
+## Overview
 
-## Core Testing Utilities
+This document outlines testing strategies for the app-bridge package, focusing on:
 
-- **`createMockNativeBridge<AppStores>(config)`**: Mocks the `NativeBridge` interface, providing a powerful way to test components with full bridge capabilities.
-  - `config.isSupported`: Boolean to simulate bridge availability.
-  - `config.stores`: An object where keys are store keys. Each value can configure:
-    - `initialState`: Starting state for that store.
-  - `isSupported()`: Returns the configured value.
-  - `getStore(key)`: Returns a store instance that reflects the current state.
-  - `produce(key, recipe)`: Allows direct state updates using a recipe function, similar to the real `NativeBridge`.
+1. Unit testing
+2. Integration testing
+3. Component testing
+4. Mock bridge usage
 
-## Testing React Components
+## Testing Approaches
 
-The primary approach involves using `createMockNativeBridge` with the React Context providers.
+### Unit Testing
 
-### 1. Testing Components with Bridge Interaction
+Test individual functions and utilities:
 
-For components that dispatch events, use selectors, or interact with multiple stores, use `createMockNativeBridge` with the main `BridgeContext.Provider`.
+```typescript
+describe('Bridge', () => {
+  test('initializes with correct state', () => {
+    // Web Bridge
+    const webBridge = createBridge<AppStores>();
+    expect(webBridge.getSnapshot().counter).toBeNull();
 
-```tsx
-import { render, screen, fireEvent } from '@testing-library/react';
-import { createMockNativeBridge } from '@open-game-system/app-bridge-testing';
-import { BridgeContext } from '../src/contexts/bridge';
-import { CounterContext } from '../src/contexts/counter';
-import { CounterComponent } from '../src/components/Counter';
-import type { AppStores } from '../src/types';
-
-test('Counter component increments value via bridge', async () => {
-  // 1. Create a mock native bridge with initial state
-  const mockBridge = createMockNativeBridge<AppStores>({
-    isSupported: true,
-    stores: {
-      counter: {
-        initialState: { count: 5 }
+    // Native Bridge
+    const nativeBridge = createNativeBridge<AppStores>({
+      initialState: {
+        counter: { value: 0 }
       }
-    }
+    });
+    expect(nativeBridge.getSnapshot().counter).toEqual({ value: 0 });
   });
 
-  // 2. Render component within BridgeContext Provider
+  test('handles store initialization states', () => {
+    const bridge = createMockBridge<AppStores>({
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    // Test uninitialization
+    bridge.reset('counter');
+    expect(bridge.getSnapshot().counter).toBeNull();
+
+    // Test resetting to initial state
+    bridge.reset();
+    expect(bridge.getSnapshot().counter).toEqual({ value: 0 });
+  });
+
+  test('handles events correctly', () => {
+    const bridge = createMockBridge<AppStores>({
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    bridge.dispatch('counter', { type: "INCREMENT" });
+    expect(bridge.getSnapshot().counter).toEqual({ value: 1 });
+  });
+});
+```
+
+### Integration Testing
+
+Test bridge interactions:
+
+```typescript
+describe('Bridge Integration', () => {
+  test('syncs state between stores', () => {
+    const bridge = createMockBridge<AppStores>({
+      stores: {
+        counter: {
+          initialState: { value: 0 },
+          reducers: {
+            INCREMENT: (state) => {
+              state.value += 1;
+            }
+          }
+        },
+        user: {
+          initialState: { name: "Test" },
+          reducers: {
+            SET_NAME: (state, event) => {
+              state.name = event.name;
+            }
+          }
+        }
+      }
+    });
+
+    bridge.dispatch('counter', { type: "INCREMENT" });
+    bridge.dispatch('user', { type: "SET_NAME", name: "New Name" });
+
+    expect(bridge.getSnapshot()).toEqual({
+      counter: { value: 1 },
+      user: { name: "New Name" }
+    });
+  });
+});
+```
+
+### Testing Store Lifecycle
+
+```typescript
+describe('Store Lifecycle', () => {
+  let mockBridge: MockBridge<AppStores>;
+
+  beforeEach(() => {
+    // Create mock bridge with initial state and reducers
+    mockBridge = createMockBridge<AppStores>({
+      stores: {
+        counter: {
+          initialState: { value: 0 },
+          reducers: {
+            INCREMENT: (state) => { state.value += 1; }
+          }
+        },
+        user: {
+          initialState: { name: 'Test' }
+        }
+      }
+    });
+  });
+
+  test('handles initialization states correctly', () => {
+    // Test initial state
+    expect(mockBridge.getSnapshot()).toEqual({
+      counter: { value: 0 },
+      user: { name: 'Test' }
+    });
+
+    // Test uninitializing a store (mock bridge specific)
+    mockBridge.uninitialize('counter');
+    expect(mockBridge.getSnapshot().counter).toBeNull();
+    expect(mockBridge.getSnapshot().user).toEqual({ name: 'Test' });
+
+    // Test resetting all stores (mock bridge specific)
+    mockBridge.reset();
+    expect(mockBridge.getSnapshot()).toEqual({
+      counter: { value: 0 },
+      user: { name: 'Test' }
+    });
+  });
+
+  test('handles component initialization correctly', () => {
+    // Start with uninitialized store
+    mockBridge.uninitialize('counter');
+
+    render(
+      <BridgeContext.Provider bridge={mockBridge}>
+        <CounterContext.Initializing>
+          <div>Loading...</div>
+        </CounterContext.Initializing>
+        <CounterContext.Initialized>
+          <CounterComponent />
+        </CounterContext.Initialized>
+      </BridgeContext.Provider>
+    );
+
+    // Should show loading initially
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+
+    // Initialize the store
+    mockBridge.produce('counter', draft => {
+      draft.value = 0;
+    });
+
+    // Should now show the counter
+    expect(screen.getByText('Count: 0')).toBeInTheDocument();
+  });
+
+  test('handles cleanup between tests', () => {
+    // Modify state
+    mockBridge.dispatch('counter', { type: 'INCREMENT' });
+    expect(mockBridge.getSnapshot().counter).toEqual({ value: 1 });
+
+    // Reset for next test (mock bridge specific)
+    mockBridge.reset();
+    expect(mockBridge.getSnapshot().counter).toEqual({ value: 0 });
+  });
+});
+```
+
+### Choosing Between Reset and Uninitialize
+
+When testing store lifecycle, choose between `reset()` and `uninitialize()` based on your testing needs:
+
+1. Use `reset()` when:
+   - You need to restore ALL stores to their initial state
+   - You're cleaning up between tests
+   - You want to start fresh with known state
+   - You're testing store initialization from scratch
+
+2. Use `uninitialize()` when:
+   - You're testing a single store's initialization handling
+   - You want to simulate a store becoming unavailable
+   - You're testing component behavior with uninitialized stores
+   - You need to test cleanup of specific stores
+
+### Component Testing
+
+Test React components:
+
+```typescript
+describe('Component Integration', () => {
+  test('handles store selection correctly', () => {
+    const bridge = createMockBridge<AppStores>({
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    function TestComponent() {
+      // Using store-specific context
+      const counterValue = CounterContext.useSelector(state => state.value);
+      const dispatch = CounterContext.useDispatch();
+
+      // Using bridge-level selector
+      const userName = BridgeContext.useSelector('user', state => state.name);
+
+      return (
+        <div>
+          <p>Count: {counterValue}</p>
+          <p>User: {userName}</p>
+          <button onClick={() => dispatch({ type: 'INCREMENT' })}>+</button>
+        </div>
+      );
+    }
+
+    render(
+      <BridgeContext.Provider bridge={bridge}>
+        <TestComponent />
+      </BridgeContext.Provider>
+    );
+
+    expect(screen.getByText('Count: 0')).toBeInTheDocument();
+    expect(screen.getByText('User: Test')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('+'));
+    expect(screen.getByText('Count: 1')).toBeInTheDocument();
+  });
+
+  test('handles uninitialized stores', () => {
+    const bridge = createMockBridge<AppStores>({
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    // Uninitialize the counter store
+    bridge.reset('counter');
+
+    function TestComponent() {
+      const value = BridgeContext.useSelector('counter', state => state?.value ?? 0);
+      return <div>Count: {value}</div>;
+    }
+
+    render(
+      <BridgeContext.Provider bridge={bridge}>
+        <TestComponent />
+      </BridgeContext.Provider>
+    );
+
+    expect(screen.getByText('Count: 0')).toBeInTheDocument();
+  });
+
+  test('handles initialization states', () => {
+    const bridge = createMockBridge<AppStores>({
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    // Start with uninitialized store
+    bridge.reset('counter');
+
+    function TestComponent() {
+      return (
+        <>
+          <CounterContext.Initializing>
+            <div>Loading...</div>
+          </CounterContext.Initializing>
+          <CounterContext.Initialized>
+            <div>Ready!</div>
+          </CounterContext.Initialized>
+        </>
+      );
+    }
+
+    render(
+      <BridgeContext.Provider bridge={bridge}>
+        <TestComponent />
+      </BridgeContext.Provider>
+    );
+
+    // Initially shows loading
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.queryByText('Ready!')).not.toBeInTheDocument();
+
+    // Initialize the store
+    bridge.dispatch('counter', { type: 'SET', value: 0 });
+
+    // Now shows ready
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('Ready!')).toBeInTheDocument();
+  });
+
+  test('handles bridge support states', () => {
+    const bridge = createMockBridge<AppStores>({
+      isSupported: false,
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    function TestComponent() {
+      return (
+        <>
+          <BridgeContext.Supported>
+            <div>Supported</div>
+          </BridgeContext.Supported>
+          <BridgeContext.Unsupported>
+            <div>Unsupported</div>
+          </BridgeContext.Unsupported>
+        </>
+      );
+    }
+
+    render(
+      <BridgeContext.Provider bridge={bridge}>
+        <TestComponent />
+      </BridgeContext.Provider>
+    );
+
+    expect(screen.queryByText('Supported')).not.toBeInTheDocument();
+    expect(screen.getByText('Unsupported')).toBeInTheDocument();
+  });
+});
+```
+
+### Error Case Testing
+
+Test error handling:
+
+```typescript
+describe('Error Handling', () => {
+  test('handles store errors gracefully', () => {
+    const mockBridge = createMockBridge<AppStores>({
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    render(
+      <BridgeContext.Provider bridge={mockBridge}>
+        <ErrorBoundary fallback={<ErrorComponent />}>
+          <CounterContext.Initialized>
+            <CounterComponent />
+          </CounterContext.Initialized>
+        </ErrorBoundary>
+      </BridgeContext.Provider>
+    );
+
+    // Test error handling
+    fireEvent.click(screen.getByText('Trigger Error'));
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+  });
+
+  test('handles bridge connection errors', () => {
+    const mockBridge = createMockBridge<AppStores>({
+      isSupported: false,
+      stores: {
+        counter: { value: 0 }
+      }
+    });
+
+    render(
+      <BridgeContext.Provider bridge={mockBridge}>
+        <BridgeContext.Unsupported>
+          <UnsupportedComponent />
+        </BridgeContext.Unsupported>
+      </BridgeContext.Provider>
+    );
+
+    expect(screen.getByText('Bridge not supported')).toBeInTheDocument();
+  });
+});
+```
+
+## Mock Bridge Usage
+
+### Basic Setup
+
+```typescript
+const mockBridge = createMockBridge<AppStores>({
+  stores: {
+    counter: { value: 0 }
+  }
+});
+```
+
+### Advanced Configuration
+
+```typescript
+const mockBridge = createMockBridge<AppStores>({
+  isSupported: true,
+  stores: {
+    counter: { value: 0 }
+  }
+});
+```
+
+## Testing Web Applications
+
+When testing web applications that use the bridge, we use the mock bridge to simulate the native bridge's behavior. This allows us to test web components in isolation.
+
+### Basic Setup
+
+```typescript
+// Create a mock bridge that simulates native bridge behavior
+const mockBridge = createMockBridge<AppStores>({
+  stores: {
+    counter: { value: 0 }
+  }
+});
+
+// Test a web component that uses the bridge
+test('Counter component updates state', () => {
   render(
     <BridgeContext.Provider bridge={mockBridge}>
       <CounterContext.Initialized>
@@ -48,150 +434,151 @@ test('Counter component increments value via bridge', async () => {
     </BridgeContext.Provider>
   );
 
-  // 3. Assert initial state
-  expect(screen.getByText('Count: 5')).toBeInTheDocument();
+  // Initial state
+  expect(screen.getByText('Count: 0')).toBeInTheDocument();
 
-  // 4. Simulate user interaction
-  fireEvent.click(screen.getByText('Increment'));
-
-  // 5. Update state using produce
-  await mockBridge.produce('counter', draft => {
-    draft.count += 1;
-  });
-
-  // 6. Assert component updates
-  expect(await screen.findByText('Count: 6')).toBeInTheDocument();
-
-  // 7. Verify store state
-  const store = await mockBridge.getStore('counter');
-  expect(store.getState().count).toBe(6);
+  // Simulate user interaction
+  fireEvent.click(screen.getByText('+'));
+  
+  // Verify state update
+  expect(screen.getByText('Count: 1')).toBeInTheDocument();
 });
 ```
 
-### 2. Testing Multiple Store Interactions
+### Testing Bridge Support
 
-When testing components that interact with multiple stores, you can use `produce` to update state across different stores:
+Test how your web app handles unsupported environments:
 
-```tsx
-test('User profile updates across stores', async () => {
-  const mockBridge = createMockNativeBridge<AppStores>({
-    isSupported: true,
+```typescript
+test('App shows fallback when bridge is not supported', () => {
+  const mockBridge = createMockBridge<AppStores>({
+    isSupported: false,
     stores: {
-      user: {
-        initialState: { name: 'John', isLoggedIn: false }
-      },
-      settings: {
-        initialState: { theme: 'light' }
-      }
+      counter: { value: 0 }
     }
   });
 
   render(
     <BridgeContext.Provider bridge={mockBridge}>
-      <UserContext.Initialized>
-        <SettingsContext.Initialized>
-          <ProfileComponent />
-        </SettingsContext.Initialized>
-      </UserContext.Initialized>
+      <BridgeContext.Unsupported>
+        <FallbackComponent />
+      </BridgeContext.Unsupported>
     </BridgeContext.Provider>
   );
 
-  // Update user state
-  await mockBridge.produce('user', draft => {
-    draft.isLoggedIn = true;
-  });
-
-  // Update settings state
-  await mockBridge.produce('settings', draft => {
-    draft.theme = 'dark';
-  });
-
-  // Assert UI updates
-  expect(await screen.findByText('Welcome back, John!')).toBeInTheDocument();
-  expect(await screen.findByText('Dark Theme Active')).toBeInTheDocument();
+  expect(screen.getByText('Bridge not supported')).toBeInTheDocument();
 });
 ```
 
-### 3. Testing Bridge Availability States
+### Testing Store Initialization
 
-Test how your application behaves when the bridge is not supported or stores are initializing:
+Test how components handle store initialization states:
 
-```tsx
-// Testing Unsupported State
-test('Shows fallback when bridge is not supported', () => {
-  const mockBridge = createMockNativeBridge<AppStores>({ 
-    isSupported: false 
+```typescript
+test('Component shows loading state while store initializes', () => {
+  const mockBridge = createMockBridge<AppStores>({
+    stores: {
+      counter: { value: 0 }
+    }
   });
 
-  render(
-    <BridgeContext.Provider bridge={mockBridge}>
-      <AppLayout />
-    </BridgeContext.Provider>
-  );
-
-  expect(screen.getByText('OpenGame App Required')).toBeInTheDocument();
-});
-
-// Testing Initializing State
-test('Shows loading indicator while store is initializing', () => {
-  const mockBridge = createMockNativeBridge<AppStores>({ 
-    isSupported: true 
-  });
+  // Start with uninitialized store
+  mockBridge.reset('counter');
 
   render(
     <BridgeContext.Provider bridge={mockBridge}>
       <CounterContext.Initializing>
-        <p>Loading...</p>
+        <LoadingComponent />
       </CounterContext.Initializing>
     </BridgeContext.Provider>
   );
 
   expect(screen.getByText('Loading...')).toBeInTheDocument();
+
+  // Simulate store initialization
+  mockBridge.dispatch('counter', { type: 'SET', value: 0 });
+
+  // Verify loading state is removed
+  expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
 });
 ```
 
-## Testing Native Side (React Native)
+### Testing Event Handling
 
-Testing React Native components follows the same principles as React components, using `createMockNativeBridge` for state management:
+Test how your web app handles different events:
 
-```tsx
-import { render, fireEvent } from '@testing-library/react-native';
-import { createMockNativeBridge } from '@open-game-system/app-bridge-testing';
-
-test('Native component updates state via produce', async () => {
-  const mockBridge = createMockNativeBridge<AppStores>({
-    isSupported: true,
+```typescript
+test('Counter handles different events correctly', () => {
+  const mockBridge = createMockBridge<AppStores>({
     stores: {
-      game: {
-        initialState: { score: 0, level: 1 }
-      }
+      counter: { value: 0 }
     }
   });
 
   render(
     <BridgeContext.Provider bridge={mockBridge}>
-      <GameContext.Initialized>
-        <GameComponent />
-      </GameContext.Initialized>
+      <CounterContext.Initialized>
+        <CounterComponent />
+      </CounterContext.Initialized>
     </BridgeContext.Provider>
   );
 
-  // Update game state
-  await mockBridge.produce('game', draft => {
-    draft.score += 100;
-    draft.level += 1;
-  });
+  // Test increment
+  fireEvent.click(screen.getByText('+'));
+  expect(screen.getByText('Count: 1')).toBeInTheDocument();
 
-  // Assert UI updates
-  expect(await screen.findByText('Score: 100')).toBeInTheDocument();
-  expect(await screen.findByText('Level: 2')).toBeInTheDocument();
+  // Test set value
+  fireEvent.click(screen.getByText('Set to 5'));
+  expect(screen.getByText('Count: 5')).toBeInTheDocument();
 });
 ```
 
-## Key Considerations
+### Testing Error Cases
 
--   **Use `produce` for State Updates**: Instead of directly manipulating store state, use the `produce` method to maintain consistency with the real bridge implementation.
--   **Context Providers**: Always wrap components in the appropriate `BridgeContext.Provider` and `StoreContext.Initialized`.
--   **Async Updates**: State updates through `produce` are asynchronous. Use `async/await` and `@testing-library`'s `findBy*` queries or `waitFor` when asserting UI changes.
--   **Initial State**: Set up initial state in the `createMockNativeBridge` config to match your test scenarios.
--   **Bridge Support**: Use `isSupported` to test both supported and unsupported environments. 
+Test how your web app handles errors:
+
+```typescript
+test('Component handles bridge errors gracefully', () => {
+  const mockBridge = createMockBridge<AppStores>({
+    stores: {
+      counter: { value: 0 }
+    }
+  });
+
+  render(
+    <BridgeContext.Provider bridge={mockBridge}>
+      <ErrorBoundary fallback={<ErrorComponent />}>
+        <CounterContext.Initialized>
+          <CounterComponent />
+        </CounterContext.Initialized>
+      </ErrorBoundary>
+    </BridgeContext.Provider>
+  );
+
+  // Trigger error
+  fireEvent.click(screen.getByText('Trigger Error'));
+  
+  // Verify error handling
+  expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+});
+```
+
+Key points for web testing:
+- Use mock bridge to simulate native bridge behavior
+- Test bridge support scenarios
+- Test store initialization states
+- Test event handling
+- Test error cases
+- Keep tests focused on web-side behavior
+- Use `uninitialize()` to test loading states
+- Use `reset()` to restore initial state between tests
+
+## Testing Best Practices
+
+1. **Isolation**: Test each component in isolation
+2. **State Management**: Use mock bridge for state control
+3. **Event Handling**: Test all event types
+4. **Edge Cases**: Test initialization and error states
+5. **Performance**: Avoid unnecessary re-renders in tests
+6. **Error Cases**: Test error boundaries and error handling
+7. **Mocking**: Keep mocks simple and focused 

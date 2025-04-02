@@ -1,32 +1,22 @@
-import { BridgeProvider } from "@open-game-system/app-bridge/react";
-import { createWebBridge } from "@open-game-system/app-bridge/web";
-import { useState } from "react";
-
-const bridge = createWebBridge();
-
-function AppContent() {
-  const [count, setCount] = useState(0);
-
-  return (
-    <div className="App">
-      <h1>React App</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-    </div>
-  );
-}
+import { useStore } from './store';
 
 function App() {
+  const { state, dispatch } = useStore('counter');
+
   return (
-    <BridgeProvider bridge={bridge}>
-      <AppContent />
-    </BridgeProvider>
+    <div>
+      <h1>App Bridge Example</h1>
+      {state === null ? (
+        <div>Loading...</div>
+      ) : (
+        <div>
+          <div>Counter: {state.value}</div>
+          <button onClick={() => dispatch({ type: 'INCREMENT' })}>Increment</button>
+          <button onClick={() => dispatch({ type: 'DECREMENT' })}>Decrement</button>
+          <button onClick={() => dispatch({ type: 'SET', value: 100 })}>Set to 100</button>
+        </div>
+      )}
+    </div>
   );
 }
 

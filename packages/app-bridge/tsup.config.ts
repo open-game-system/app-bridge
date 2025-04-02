@@ -4,7 +4,7 @@ export default defineConfig({
   entry: {
     'index': 'src/index.ts',
     'web': 'src/web/index.ts',
-    'react': 'src/react/index.ts',
+    'react': 'src/react/index.tsx',
     'native': 'src/native/index.ts',
     'testing': 'src/testing/index.ts'
   },

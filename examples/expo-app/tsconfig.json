@@ -12,7 +12,8 @@
     "paths": {
       "*": ["node_modules/*"],
       "@open-game-system/app-bridge": ["../../packages/app-bridge/src"],
-      "@open-game-system/app-bridge/native": ["../../packages/app-bridge/src/native"]
+      "@open-game-system/app-bridge/native": ["../../packages/app-bridge/src/native"],
+      "@open-game-system/app-bridge/react": ["../../packages/app-bridge/src/react"]
     },
     "types": ["react", "react-native", "jest", "node"],
     "allowJs": true,
