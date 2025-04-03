@@ -7,7 +7,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-native",
+    "jsx": "react",
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*"],
@@ -15,7 +15,7 @@
       "@open-game-system/app-bridge/native": ["../../packages/app-bridge/src/native"],
       "@open-game-system/app-bridge/react": ["../../packages/app-bridge/src/react"]
     },
-    "types": ["react", "react-native", "jest", "node"],
+    "types": ["react", "jest", "node"],
     "allowJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
