@@ -105,12 +105,6 @@ export interface Bridge<TStores extends BridgeStores> {
    * @param event The event to dispatch
    */
   dispatch: <K extends keyof TStores>(storeKey: K, event: TStores[K]['events']) => void;
-
-  /**
-   * Reset all stores to their initial state
-   * @param storeKey Optional store key to reset only a specific store
-   */
-  reset: (storeKey?: keyof TStores) => void;
 }
 ```
 
@@ -131,30 +125,13 @@ Creates a native bridge instance for use in React Native applications:
 
 ```typescript
 function createNativeBridge<TStores>(config: {
-  stores: {
-    [K in keyof TStores]?: {
-      initialState: TStores[K]['state'];
-      reducers?: {
-        [E in TStores[K]['events']['type']]: (
-          state: TStores[K]['state'],
-          event: Extract<TStores[K]['events'], { type: E }>
-        ) => void;
-      };
-    };
-  };
+  initialState?: { [K in keyof TStores]: TStores[K]['state'] | null };
 }): NativeBridge<TStores>;
 
 // Example
 const bridge = createNativeBridge<AppStores>({
-  stores: {
-    counter: {
-      initialState: { value: 0 },
-      reducers: {
-        INCREMENT: (state) => {
-          state.value += 1;
-        }
-      }
-    }
+  initialState: {
+    counter: { value: 0 }
   }
 });
 ```
@@ -213,19 +190,29 @@ export interface NativeBridge<TStores extends BridgeStores> {
 
   /**
    * Register a WebView with the bridge
-   * This will inject the necessary JavaScript and set up message handlers
+   * This sets up bidirectional communication between the native app and the WebView:
+   * 1. Injects the necessary JavaScript into the WebView to handle state updates
+   * 2. Sets up the WebView's onMessage handler to receive events from the web side
+   * 3. Sends the initial state to the WebView
+   * 4. Ensures the WebView receives state updates when the native state changes
+   * 
+   * @param webView The WebView instance to register
    */
   registerWebView: (webView: WebView) => void;
 
   /**
    * Unregister a WebView from receiving state updates
-   * This will clean up message handlers
+   * This cleans up the message handlers and stops sending state updates to the WebView
+   * 
+   * @param webView The WebView instance to unregister
    */
   unregisterWebView: (webView: WebView) => void;
 }
 ```
 
 ### WebView Setup
+
+The WebView integration is a crucial part of the bridge, enabling bidirectional communication between the native app and the web content. Here's how it works:
 
 ```typescript
 // In React Native app
@@ -251,12 +238,43 @@ function GameWebView() {
 }
 ```
 
-The bridge automatically:
-1. Injects the necessary JavaScript into the WebView
-2. Sets up message handlers for communication
-3. Sends the initial state to the WebView
-4. Broadcasts state updates to all registered WebViews
-5. Cleans up message handlers when a WebView is unregistered
+#### Communication Flow
+
+1. **Native to Web Communication**:
+   - When the native state changes, the bridge uses `injectJavaScript` to send state updates to the WebView
+   - The injected JavaScript dispatches a `MessageEvent` with the state update
+   - The web bridge listens for these events and updates its local state
+
+2. **Web to Native Communication**:
+   - When the web side dispatches an event, it uses `postMessage` to send the event to the native side
+   - The WebView's `onMessage` handler receives the event and passes it to the bridge
+   - The bridge processes the event and updates the native state
+
+#### Message Format
+
+The messages exchanged between the native and web sides follow a specific format:
+
+1. **State Updates (Native to Web)**:
+   ```json
+   {
+     "type": "STATE_UPDATE",
+     "storeKey": "counter",
+     "operations": [
+       { "op": "replace", "path": "/value", "value": 42 }
+     ]
+   }
+   ```
+
+2. **Events (Web to Native)**:
+   ```json
+   {
+     "type": "EVENT",
+     "storeKey": "counter",
+     "event": { "type": "INCREMENT" }
+   }
+   ```
+
+The bridge automatically handles the serialization and deserialization of these messages, so you don't need to worry about the details.
 
 ### Multiple WebViews
 
@@ -449,35 +467,31 @@ function App() {
 
 ### `createMockBridge<TStores>`
 
-Creates a mock bridge for testing:
+Creates a mock bridge instance for testing. The mock bridge extends the `Bridge` interface with additional testing-specific methods:
 
 ```typescript
+interface MockBridge<TStores extends BridgeStores> extends Bridge<TStores> {
+  /**
+   * Reset the mock bridge's state to its initial values
+   * @param storeKey Optional store key to reset only a specific store
+   */
+  reset: (storeKey?: keyof TStores) => void;
+}
+
 function createMockBridge<TStores>(config: {
-  isSupported?: boolean;
-  stores: {
-    [K in keyof TStores]?: {
-      initialState: TStores[K]['state'];
-      reducers?: {
-        [E in TStores[K]['events']['type']]: (
-          state: TStores[K]['state'],
-          event: Extract<TStores[K]['events'], { type: E }>
-        ) => void;
-      };
-    };
-  };
-}): Bridge<TStores>;
+  initialState?: { [K in keyof TStores]: TStores[K]['state'] | null };
+}): MockBridge<TStores>;
 
 // Example
-const mockBridge = createMockBridge<AppStores>({
-  stores: {
-    counter: {
-      initialState: { value: 0 },
-      reducers: {
-        INCREMENT: (state) => {
-          state.value += 1;
-        }
-      }
-    }
+const bridge = createMockBridge<AppStores>({
+  initialState: {
+    counter: { value: 0 }
   }
 });
 ```
+
+The mock bridge is useful for testing web components that use the bridge, as it provides a way to:
+1. Initialize state for testing
+2. Reset state between tests
+3. Verify event dispatches
+4. Test state updates

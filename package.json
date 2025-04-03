@@ -9,8 +9,10 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.2",
+    "@types/testing-library__jest-dom": "^6.0.0",
     "turbo": "^1.12.2",
     "typescript": "^5.3.3",
     "vitest": "^1.2.2"
   }
-} 
+}

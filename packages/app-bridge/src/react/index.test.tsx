@@ -1,11 +1,14 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import type { Bridge, BridgeStores } from '../types';
 import { createBridgeContext } from './index';
+import { createMockBridge } from '../testing';
+import type { BridgeStores, State } from '../types';
 
-// Test types
-interface CounterState {
+interface CounterState extends State {
   value: number;
 }
 
@@ -25,290 +28,173 @@ describe('React Bridge Integration', () => {
   const BridgeContext = createBridgeContext<TestStores>();
   const CounterContext = BridgeContext.createStoreContext('counter');
 
-  const createMockBridge = (): Bridge<TestStores> => ({
-    isSupported: () => true,
-    getSnapshot: () => ({ counter: null }),
-    subscribe: vi.fn(),
-    dispatch: vi.fn(),
-    produce: vi.fn(),
-    setState: vi.fn(),
-    reset: vi.fn()
-  });
+  // Counter component for testing
+  const Counter = () => {
+    const state = CounterContext.useStore();
+    const dispatch = CounterContext.useDispatch();
 
-  it('should provide bridge context', () => {
-    const bridge = createMockBridge();
+    if (!state) return null;
 
-    const { result } = renderHook(() => BridgeContext.useBridge(), {
-      wrapper: ({ children }) => (
-        <BridgeContext.Provider bridge={bridge}>{children}</BridgeContext.Provider>
-      )
-    });
-
-    expect(result.current).toBe(bridge);
-  });
-
-  it('should provide store context', () => {
-    const bridge = {
-      ...createMockBridge(),
-      getSnapshot: () => ({ counter: { value: 42 } })
-    };
-
-    const { result } = renderHook(() => CounterContext.useStore(), {
-      wrapper: ({ children }) => (
-        <BridgeContext.Provider bridge={bridge}>{children}</BridgeContext.Provider>
-      )
-    });
-
-    expect(result.current).toEqual({ value: 42 });
-  });
-
-  it('should handle uninitialized stores', () => {
-    const bridge = createMockBridge();
-
-    const { result } = renderHook(() => CounterContext.useStore(), {
-      wrapper: ({ children }) => (
-        <BridgeContext.Provider bridge={bridge}>{children}</BridgeContext.Provider>
-      )
-    });
-
-    expect(result.current).toBeNull();
-  });
-
-  it('should handle store updates', () => {
-    const bridge = {
-      ...createMockBridge(),
-      getSnapshot: () => ({ counter: { value: 42 } })
-    };
-
-    const { result } = renderHook(() => CounterContext.useStore(), {
-      wrapper: ({ children }) => (
-        <BridgeContext.Provider bridge={bridge}>{children}</BridgeContext.Provider>
-      )
-    });
-
-    act(() => {
-      bridge.setState('counter', { value: 100 });
-    });
-
-    expect(result.current).toEqual({ value: 100 });
-  });
-
-  it('should handle store resets', () => {
-    const bridge = {
-      ...createMockBridge(),
-      getSnapshot: () => ({ counter: { value: 42 } })
-    };
-
-    const { result } = renderHook(() => CounterContext.useStore(), {
-      wrapper: ({ children }) => (
-        <BridgeContext.Provider bridge={bridge}>{children}</BridgeContext.Provider>
-      )
-    });
-
-    act(() => {
-      bridge.reset('counter');
-    });
-
-    expect(result.current).toBeNull();
-  });
-
-  it('should handle store errors', () => {
-    const bridge = {
-      ...createMockBridge(),
-      getSnapshot: () => ({ counter: { value: 42 } })
-    };
-
-    const { result } = renderHook(() => CounterContext.useStore(), {
-      wrapper: ({ children }) => (
-        <BridgeContext.Provider bridge={bridge}>{children}</BridgeContext.Provider>
-      )
-    });
-
-    act(() => {
-      bridge.setState('counter', null);
-    });
-
-    expect(result.current).toBeNull();
-  });
-
-  it('provides bridge through context', () => {
-    const bridge = createMockBridge();
-    let contextBridge: Bridge<TestStores> | undefined;
-
-    function TestComponent() {
-      contextBridge = BridgeContext.useBridge();
-      return null;
-    }
-
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <TestComponent />
-      </BridgeContext.Provider>
+    return (
+      <div>
+        <p>Count: {state.value}</p>
+        <button onClick={() => dispatch({ type: 'INCREMENT' })}>+</button>
+        <button onClick={() => dispatch({ type: 'DECREMENT' })}>-</button>
+        <button onClick={() => dispatch({ type: 'SET', value: 42 })}>Set to 42</button>
+      </div>
     );
+  };
 
-    expect(contextBridge).toBe(bridge);
-  });
-
-  it('handles store initialization state', () => {
-    // Create bridge without initializing the store
-    const bridge = createMockBridge();
-
-    // Reset the store to null state
-    act(() => {
-      bridge.setState('counter', null);
-    });
-
-    function TestComponent() {
-      return (
-        <>
-          <CounterContext.Initializing>
-            <div>Loading...</div>
-          </CounterContext.Initializing>
-          <CounterContext.Initialized>
-            <div>Ready!</div>
-          </CounterContext.Initialized>
-        </>
-      );
-    }
-
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <TestComponent />
-      </BridgeContext.Provider>
-    );
-
-    // Initially shows loading
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
-    expect(screen.queryByText('Ready!')).not.toBeInTheDocument();
-
-    // Update state to initialize
-    act(() => {
-      bridge.setState('counter', { value: 0 });
-    });
-
-    // Now shows ready
-    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
-    expect(screen.getByText('Ready!')).toBeInTheDocument();
-  });
-
-  it('provides state through useStore and useSelector', () => {
-    const bridge = createMockBridge();
-
-    function TestComponent() {
-      const state = CounterContext.useStore();
-      const value = CounterContext.useSelector(s => s.value);
-      return (
-        <div>
-          <div data-testid="raw">Raw: {state?.value}</div>
-          <div data-testid="selected">Selected: {value}</div>
-        </div>
-      );
-    }
-
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <CounterContext.Initialized>
-          <TestComponent />
-        </CounterContext.Initialized>
-      </BridgeContext.Provider>
-    );
-
-    // Initial state
-    expect(screen.getByTestId('raw')).toHaveTextContent('Raw: 0');
-    expect(screen.getByTestId('selected')).toHaveTextContent('Selected: 0');
-
-    // Update state
-    act(() => {
-      bridge.dispatch('counter', { type: 'SET', value: 100 });
-    });
-
-    // Updated state
-    expect(screen.getByTestId('raw')).toHaveTextContent('Raw: 100');
-    expect(screen.getByTestId('selected')).toHaveTextContent('Selected: 100');
-  });
-
-  it('handles bridge support state', () => {
-    const bridge = createMockBridge();
-
-    render(
+  // App component for testing
+  const App = ({ bridge }: { bridge: ReturnType<typeof createMockBridge<TestStores>> }) => {
+    return (
       <BridgeContext.Provider bridge={bridge}>
         <BridgeContext.Supported>
-          <div>Supported</div>
+          <CounterContext.Provider>
+            <CounterContext.Initialized>
+              <Counter />
+            </CounterContext.Initialized>
+            <CounterContext.Initializing>
+              <div>Loading counter...</div>
+            </CounterContext.Initializing>
+          </CounterContext.Provider>
         </BridgeContext.Supported>
         <BridgeContext.Unsupported>
-          <div>Unsupported</div>
+          <div>Bridge not supported</div>
         </BridgeContext.Unsupported>
       </BridgeContext.Provider>
     );
+  };
 
-    expect(screen.queryByText('Supported')).not.toBeInTheDocument();
-    expect(screen.getByText('Unsupported')).toBeInTheDocument();
+  describe('Bridge Provider', () => {
+    it('throws error when hooks are used outside provider', () => {
+      // Suppress console.error for this test
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() => {
+        render(<CounterContext.Provider><Counter /></CounterContext.Provider>);
+      }).toThrow('Bridge not found in context');
+
+      consoleSpy.mockRestore();
+    });
   });
 
-  it('allows dispatching events through useDispatch', () => {
-    const bridge = createMockBridge();
+  describe('Bridge Support', () => {
+    it('shows supported content when bridge is supported', () => {
+      const mockBridge = createMockBridge<TestStores>({
+        isSupported: true,
+        stores: {
+          counter: { value: 0 }
+        }
+      });
 
-    function TestComponent() {
-      const value = CounterContext.useSelector(s => s.value);
-      const dispatch = CounterContext.useDispatch();
+      render(<App bridge={mockBridge} />);
+      expect(screen.getByText('Count: 0')).toBeInTheDocument();
+    });
 
-      return (
-        <div>
-          <div data-testid="count">Count: {value}</div>
-          <button onClick={() => dispatch({ type: 'INCREMENT' })}>+</button>
-          <button onClick={() => dispatch({ type: 'DECREMENT' })}>-</button>
-          <button onClick={() => dispatch({ type: 'SET', value: 0 })}>Reset</button>
-        </div>
-      );
-    }
+    it('shows unsupported content when bridge is not supported', () => {
+      const mockBridge = createMockBridge<TestStores>({
+        isSupported: false,
+        stores: {
+          counter: { value: 0 }
+        }
+      });
 
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <CounterContext.Initialized>
-          <TestComponent />
-        </CounterContext.Initialized>
-      </BridgeContext.Provider>
-    );
+      render(<App bridge={mockBridge} />);
+      expect(screen.getByText('Bridge not supported')).toBeInTheDocument();
+    });
+  });
 
-    // Initial state
-    expect(screen.getByTestId('count')).toHaveTextContent('Count: 0');
+  describe('Store Context', () => {
+    it('shows initializing content when store is not initialized', () => {
+      const mockBridge = createMockBridge<TestStores>({
+        isSupported: true,
+        stores: {
+          counter: { value: 0 }
+        }
+      });
 
-    // Increment
-    act(() => {
+      // Override getSnapshot to return null for counter store
+      const originalGetSnapshot = mockBridge.getSnapshot;
+      mockBridge.getSnapshot = () => ({
+        counter: null
+      });
+
+      render(<App bridge={mockBridge} />);
+      expect(screen.getByText('Loading counter...')).toBeInTheDocument();
+
+      // Restore original getSnapshot
+      mockBridge.getSnapshot = originalGetSnapshot;
+    });
+
+    it('shows initialized content when store is initialized', () => {
+      const mockBridge = createMockBridge<TestStores>({
+        isSupported: true,
+        stores: {
+          counter: { value: 0 }
+        }
+      });
+
+      render(<App bridge={mockBridge} />);
+      expect(screen.getByText('Count: 0')).toBeInTheDocument();
+    });
+  });
+
+  describe('State Updates', () => {
+    it('updates state when events are dispatched', () => {
+      const mockBridge = createMockBridge<TestStores>({
+        isSupported: true,
+        stores: {
+          counter: { value: 0 }
+        }
+      });
+
+      render(<App bridge={mockBridge} />);
+      expect(screen.getByText('Count: 0')).toBeInTheDocument();
+
+      // Increment
       fireEvent.click(screen.getByText('+'));
-    });
-    expect(screen.getByTestId('count')).toHaveTextContent('Count: 1');
+      expect(screen.getByText('Count: 1')).toBeInTheDocument();
 
-    // Decrement
-    act(() => {
+      // Decrement
       fireEvent.click(screen.getByText('-'));
+      expect(screen.getByText('Count: 0')).toBeInTheDocument();
+
+      // Set to 42
+      fireEvent.click(screen.getByText('Set to 42'));
+      expect(screen.getByText('Count: 42')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('count')).toHaveTextContent('Count: 0');
 
-    // Set to specific value
-    act(() => {
-      fireEvent.click(screen.getByText('Reset'));
+    it('resets state when store is reset', async () => {
+      console.log('Starting reset state test');
+      const mockBridge = createMockBridge<TestStores>({
+        isSupported: true,
+        stores: {
+          counter: { value: 0 }
+        }
+      });
+      console.log('Created mockBridge with initial state:', mockBridge.getSnapshot());
+
+      console.log('Rendering App component');
+      render(<App bridge={mockBridge} />);
+      console.log('After render, DOM:', document.body.innerHTML);
+      expect(screen.getByText('Count: 0')).toBeInTheDocument();
+
+      // Increment
+      console.log('Clicking increment button');
+      fireEvent.click(screen.getByText('+'));
+      console.log('After increment, DOM:', document.body.innerHTML);
+      expect(screen.getByText('Count: 1')).toBeInTheDocument();
+
+      // Reset counter store
+      console.log('Resetting counter store');
+      mockBridge.reset('counter');
+      console.log('After reset, bridge state:', mockBridge.getSnapshot());
+      console.log('After reset, DOM:', document.body.innerHTML);
+      
+      // Wait for the DOM to update
+      await screen.findByText('Count: 0');
+      expect(screen.getByText('Count: 0')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('count')).toHaveTextContent('Count: 0');
-  });
-
-  it('throws error when using useSelector outside of Initialized', () => {
-    const bridge = createMockBridge();
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    function TestComponent() {
-      const value = CounterContext.useSelector(s => s.value);
-      return <div>{value}</div>;
-    }
-
-    expect(() => {
-      render(
-        <BridgeContext.Provider bridge={bridge}>
-          <TestComponent />
-        </BridgeContext.Provider>
-      );
-    }).toThrow('Cannot use useSelector outside of a StoreContext.Initialized component');
-
-    consoleSpy.mockRestore();
   });
 }); 

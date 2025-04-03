@@ -16,8 +16,13 @@ export function createNativeBridge<TStores extends BridgeStores>(
 ): Bridge<TStores> & {
   registerWebView: (webView: WebView) => void;
   unregisterWebView: (webView: WebView) => void;
+  produce: <K extends keyof TStores>(storeKey: K, producer: (draft: TStores[K]['state']) => void) => void;
+  setState: <K extends keyof TStores>(key: K, newState: TStores[K]['state'] | null) => void;
+  reset: (storeKey?: keyof TStores) => void;
 } {
-  let state: { [K in keyof TStores]: TStores[K]['state'] | null } = config.initialState || {} as any;
+  // Create a deep copy of the initial state to avoid reference issues
+  const initialState = config.initialState ? JSON.parse(JSON.stringify(config.initialState)) : {} as any;
+  let state: { [K in keyof TStores]: TStores[K]['state'] | null } = JSON.parse(JSON.stringify(initialState));
   const listeners = new Map<keyof TStores, Set<(state: any) => void>>();
   const webViews = new Set<WebView>();
 
@@ -86,9 +91,46 @@ export function createNativeBridge<TStores extends BridgeStores>(
       notifyListeners(key);
     },
 
-    reset: () => {
-      state = {} as any;
-      notifyListeners('' as keyof TStores);
+    reset: (storeKey?: keyof TStores) => {
+      if (storeKey) {
+        // Get the initial state for this store
+        const storeInitialState = initialState[storeKey];
+        if (storeInitialState === undefined) {
+          console.warn(`No initial state found for store: ${String(storeKey)}`);
+          return;
+        }
+        
+        // Reset to initial state (already a deep copy)
+        state[storeKey] = JSON.parse(JSON.stringify(storeInitialState));
+        
+        // Send reset message to web views
+        broadcastToWebViews({
+          type: 'STATE_RESET',
+          storeKey: storeKey as string,
+          state: state[storeKey],
+        });
+        
+        notifyListeners(storeKey);
+      } else {
+        // Reset all stores to their initial state
+        if (!initialState || Object.keys(initialState).length === 0) {
+          console.warn('No initial state found for any stores');
+          return;
+        }
+        
+        // Reset to initial state (already a deep copy)
+        state = JSON.parse(JSON.stringify(initialState));
+        
+        // Send reset messages for all stores
+        Object.keys(state).forEach(key => {
+          broadcastToWebViews({
+            type: 'STATE_RESET',
+            storeKey: key,
+            state: state[key],
+          });
+          notifyListeners(key as keyof TStores);
+        });
+      }
     },
 
     registerWebView: (webView: WebView) => {

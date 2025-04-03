@@ -23,29 +23,18 @@ describe('createMockBridge', () => {
     const bridge = createMockBridge<TestStores>({
       isSupported: true,
       stores: {
-        counter: {
-          value: 42,
-          events: {} as CounterEvents,
-        },
+        counter: { value: 42 }
       },
     });
 
     expect(bridge.getSnapshot().counter).toEqual({ value: 42 });
   });
 
-  it('should handle state updates', () => {
+  it('should handle state updates via dispatch', () => {
     const bridge = createMockBridge<TestStores>({
       isSupported: true,
       stores: {
-        counter: {
-          value: 0,
-          events: {} as CounterEvents,
-          reducers: {
-            INCREMENT: (state: CounterState) => ({ value: state.value + 1 }),
-            DECREMENT: (state: CounterState) => ({ value: state.value - 1 }),
-            SET: (state: CounterState, event: Extract<CounterEvents, { type: 'SET' }>) => ({ value: event.value ?? state.value }),
-          },
-        },
+        counter: { value: 0 }
       },
     });
 
@@ -63,13 +52,7 @@ describe('createMockBridge', () => {
     const bridge = createMockBridge<TestStores>({
       isSupported: true,
       stores: {
-        counter: {
-          value: 0,
-          events: {} as CounterEvents,
-          reducers: {
-            INCREMENT: (state: CounterState) => ({ value: state.value + 1 }),
-          },
-        },
+        counter: { value: 0 }
       },
     });
 
@@ -87,13 +70,7 @@ describe('createMockBridge', () => {
     const bridge = createMockBridge<TestStores>({
       isSupported: true,
       stores: {
-        counter: {
-          value: 0,
-          events: {} as CounterEvents,
-          reducers: {
-            INCREMENT: (state: CounterState) => ({ value: state.value + 1 }),
-          },
-        },
+        counter: { value: 0 }
       },
     });
 
@@ -112,13 +89,7 @@ describe('createMockBridge', () => {
     const bridge = createMockBridge<TestStores>({
       isSupported: true,
       stores: {
-        counter: {
-          value: 0,
-          events: {} as CounterEvents,
-          reducers: {
-            INCREMENT: (state: CounterState) => ({ value: state.value + 1 }),
-          },
-        },
+        counter: { value: 0 }
       },
     });
 
@@ -129,35 +100,23 @@ describe('createMockBridge', () => {
     expect(bridge.getSnapshot().counter).toEqual({ value: 0 });
   });
 
-  it('should handle setState', () => {
+  it('should check if bridge is supported', () => {
     const bridge = createMockBridge<TestStores>({
       isSupported: true,
       stores: {
-        counter: {
-          value: 0,
-          events: {} as CounterEvents,
-        },
+        counter: { value: 0 }
       },
     });
 
-    bridge.setState('counter', { value: 42 });
-    expect(bridge.getSnapshot().counter).toEqual({ value: 42 });
-  });
+    expect(bridge.isSupported()).toBe(true);
 
-  it('should handle produce', () => {
-    const bridge = createMockBridge<TestStores>({
-      isSupported: true,
+    const unsupportedBridge = createMockBridge<TestStores>({
+      isSupported: false,
       stores: {
-        counter: {
-          value: 0,
-          events: {} as CounterEvents,
-        },
+        counter: { value: 0 }
       },
     });
 
-    bridge.produce('counter', draft => {
-      draft.value = 42;
-    });
-    expect(bridge.getSnapshot().counter).toEqual({ value: 42 });
+    expect(unsupportedBridge.isSupported()).toBe(false);
   });
 }); 

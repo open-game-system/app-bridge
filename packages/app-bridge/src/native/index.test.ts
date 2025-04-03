@@ -98,12 +98,12 @@ describe('createNativeBridge', () => {
       }
     });
 
-    bridge.produce('counter', draft => {
+    bridge.produce('counter', (draft: CounterState) => {
       draft.value = 10;
     });
     expect(bridge.getSnapshot().counter).toEqual({ value: 10 });
 
-    bridge.produce('counter', draft => {
+    bridge.produce('counter', (draft: CounterState) => {
       draft.value = 42;
     });
     expect(bridge.getSnapshot().counter).toEqual({ value: 42 });
@@ -116,7 +116,7 @@ describe('createNativeBridge', () => {
       }
     });
 
-    bridge.produce('counter', draft => {
+    bridge.produce('counter', (draft: CounterState) => {
       draft.value = 10;
     });
     expect(bridge.getSnapshot().counter).toEqual({ value: 10 });
@@ -132,7 +132,7 @@ describe('createNativeBridge', () => {
       }
     });
 
-    bridge.produce('counter', draft => {
+    bridge.produce('counter', (draft: CounterState) => {
       draft.value = 10;
     });
     expect(bridge.getSnapshot().counter).toEqual({ value: 10 });

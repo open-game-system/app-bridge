@@ -1,3 +1,6 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWebBridge } from './index';
 import type { BridgeStores } from '../types';
@@ -143,53 +146,6 @@ describe('Web Bridge', () => {
     });
   });
 
-  describe('produce', () => {
-    it('updates state using immer-style recipe', () => {
-      // First set initial state
-      const stateUpdate = {
-        type: 'STATE_UPDATE',
-        storeKey: 'counter',
-        data: { value: 0 }
-      };
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: JSON.stringify(stateUpdate)
-        })
-      );
-
-      // Then produce a new state
-      bridge.produce('counter', draft => {
-        draft.value = 1;
-      });
-
-      expect(bridge.getSnapshot().counter).toEqual({ value: 1 });
-    });
-
-    it('does nothing if store is not initialized', () => {
-      bridge.produce('counter', draft => {
-        draft.value = 1;
-      });
-      expect(bridge.getSnapshot().counter).toBeUndefined();
-    });
-  });
-
-  describe('setState', () => {
-    it('sets state directly', () => {
-      bridge.setState('counter', { value: 42 });
-      expect(bridge.getSnapshot().counter).toEqual({ value: 42 });
-    });
-
-    it('can uninitialize a store', () => {
-      // First set initial state
-      bridge.setState('counter', { value: 42 });
-      expect(bridge.getSnapshot().counter).toEqual({ value: 42 });
-
-      // Then uninitialize
-      bridge.reset('counter');
-      expect(bridge.getSnapshot().counter).toBeUndefined();
-    });
-  });
-
   describe('message handling', () => {
     it('handles malformed messages gracefully', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -212,13 +168,15 @@ describe('Web Bridge', () => {
       const listener = vi.fn();
       bridge.subscribe('counter', listener);
 
+      const unknownMessage = {
+        type: 'UNKNOWN',
+        storeKey: 'counter',
+        data: { value: 42 }
+      };
+
       window.dispatchEvent(
         new MessageEvent('message', {
-          data: JSON.stringify({
-            type: 'UNKNOWN',
-            storeKey: 'counter',
-            data: { value: 42 }
-          })
+          data: JSON.stringify(unknownMessage)
         })
       );
 

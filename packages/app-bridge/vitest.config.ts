@@ -2,13 +2,18 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    globals: true,
     environment: 'jsdom',
-    setupFiles: ['node_modules/@testing-library/jest-dom'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: [
+      './src/web/test-setup.ts'
+    ],
+    globals: true,
+    include: ['src/**/*.test.{ts,tsx}', 'examples/**/*.test.{ts,tsx}'],
     coverage: {
+      provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['**/node_modules/**', '**/dist/**', '**/lib/**'],
+    },
+    deps: {
+      inline: ['@testing-library/react', '@testing-library/jest-dom'],
     },
   },
 });
