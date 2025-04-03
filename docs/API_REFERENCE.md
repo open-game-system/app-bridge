@@ -472,19 +472,32 @@ Creates a mock bridge instance for testing. The mock bridge extends the `Bridge`
 ```typescript
 interface MockBridge<TStores extends BridgeStores> extends Bridge<TStores> {
   /**
-   * Reset the mock bridge's state to its initial values
+   * Reset the mock bridge's state to its initial values from when createMockBridge was called
    * @param storeKey Optional store key to reset only a specific store
+   * 
+   * Note: This method is specific to the mock bridge and is not available on the native bridge.
+   * When called, it will:
+   * 1. Reset the specified store(s) to their initial state from config.stores
+   * 2. If a store wasn't initialized with an initial state, its state remains unchanged
+   * 3. Always clears the dispatch history
    */
   reset: (storeKey?: keyof TStores) => void;
 }
 
 function createMockBridge<TStores>(config: {
-  initialState?: { [K in keyof TStores]: TStores[K]['state'] | null };
+  isSupported?: boolean;
+  stores?: { [K in keyof TStores]: TStores[K]['state'] };
+  reducers?: {
+    [K in keyof TStores]?: (
+      state: TStores[K]['state'],
+      event: TStores[K]['events']
+    ) => TStores[K]['state'];
+  };
 }): MockBridge<TStores>;
 
 // Example
 const bridge = createMockBridge<AppStores>({
-  initialState: {
+  stores: {
     counter: { value: 0 }
   }
 });
@@ -492,6 +505,6 @@ const bridge = createMockBridge<AppStores>({
 
 The mock bridge is useful for testing web components that use the bridge, as it provides a way to:
 1. Initialize state for testing
-2. Reset state between tests
+2. Reset state between tests to the initial state from when createMockBridge was called
 3. Verify event dispatches
 4. Test state updates

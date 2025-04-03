@@ -186,10 +186,11 @@ describe('Store Lifecycle', () => {
 When testing store lifecycle, choose between `reset()` and `uninitialize()` based on your testing needs:
 
 1. Use `reset()` when:
-   - You need to restore ALL stores to their initial state
+   - You need to restore ALL stores to their initial state from when createMockBridge was called
    - You're cleaning up between tests
    - You want to start fresh with known state
    - You're testing store initialization from scratch
+   - Note: This is specific to the mock bridge and resets to the initial state from config.stores
 
 2. Use `uninitialize()` when:
    - You're testing a single store's initialization handling
@@ -482,7 +483,7 @@ test('Component shows loading state while store initializes', () => {
     }
   });
 
-  // Start with uninitialized store
+  // Start with uninitialized store by resetting to initial state
   mockBridge.reset('counter');
 
   render(
@@ -502,83 +503,3 @@ test('Component shows loading state while store initializes', () => {
   expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
 });
 ```
-
-### Testing Event Handling
-
-Test how your web app handles different events:
-
-```typescript
-test('Counter handles different events correctly', () => {
-  const mockBridge = createMockBridge<AppStores>({
-    stores: {
-      counter: { value: 0 }
-    }
-  });
-
-  render(
-    <BridgeContext.Provider bridge={mockBridge}>
-      <CounterContext.Initialized>
-        <CounterComponent />
-      </CounterContext.Initialized>
-    </BridgeContext.Provider>
-  );
-
-  // Test increment
-  fireEvent.click(screen.getByText('+'));
-  expect(screen.getByText('Count: 1')).toBeInTheDocument();
-
-  // Test set value
-  fireEvent.click(screen.getByText('Set to 5'));
-  expect(screen.getByText('Count: 5')).toBeInTheDocument();
-});
-```
-
-### Testing Error Cases
-
-Test how your web app handles errors:
-
-```typescript
-test('Component handles bridge errors gracefully', () => {
-  const mockBridge = createMockBridge<AppStores>({
-    stores: {
-      counter: { value: 0 }
-    }
-  });
-
-  render(
-    <BridgeContext.Provider bridge={mockBridge}>
-      <ErrorBoundary fallback={<ErrorComponent />}>
-        <CounterContext.Initialized>
-          <CounterComponent />
-        </CounterContext.Initialized>
-      </ErrorBoundary>
-    </BridgeContext.Provider>
-  );
-
-  // Trigger error
-  fireEvent.click(screen.getByText('Trigger Error'));
-  
-  // Verify error handling
-  expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-});
-```
-
-Key points for web testing:
-- Use mock bridge to simulate native bridge behavior
-- Test bridge support scenarios
-- Test store initialization states
-- Test event handling
-- Test error cases
-- Keep tests focused on web-side behavior
-- Use `uninitialize()` to test loading states
-- Use `reset()` to restore initial state between tests
-
-## Testing Best Practices
-
-1. **Isolation**: Test each component in isolation
-2. **State Management**: Use mock bridge for state control
-3. **Event Handling**: Test all event types
-4. **Edge Cases**: Test initialization and error states
-5. **Performance**: Avoid unnecessary re-renders in tests
-6. **Error Cases**: Test error boundaries and error handling
-7. **Mocking**: Keep mocks simple and focused 
