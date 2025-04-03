@@ -166,31 +166,21 @@ describe('React Bridge Integration', () => {
     });
 
     it('resets state when store is reset', async () => {
-      console.log('Starting reset state test');
       const mockBridge = createMockBridge<TestStores>({
         isSupported: true,
         stores: {
           counter: { value: 0 }
         }
       });
-      console.log('Created mockBridge with initial state:', mockBridge.getSnapshot());
-
-      console.log('Rendering App component');
       render(<App bridge={mockBridge} />);
-      console.log('After render, DOM:', document.body.innerHTML);
       expect(screen.getByText('Count: 0')).toBeInTheDocument();
 
       // Increment
-      console.log('Clicking increment button');
       fireEvent.click(screen.getByText('+'));
-      console.log('After increment, DOM:', document.body.innerHTML);
       expect(screen.getByText('Count: 1')).toBeInTheDocument();
 
       // Reset counter store
-      console.log('Resetting counter store');
       mockBridge.reset('counter');
-      console.log('After reset, bridge state:', mockBridge.getSnapshot());
-      console.log('After reset, DOM:', document.body.innerHTML);
       
       // Wait for the DOM to update
       await screen.findByText('Count: 0');

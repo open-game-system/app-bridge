@@ -92,31 +92,25 @@ export function createBridgeContext<TStores extends BridgeStores>() {
     
     const StoreProvider = memo(({ children }: { children: ReactNode }) => {
       const bridge = useBridge();
-      console.log(`StoreProvider for ${String(storeKey)} rendering`);
       
       const state = useSyncExternalStoreWithSelector(
         (onStoreChange) => {
-          console.log(`Setting up subscription for ${String(storeKey)}`);
           return bridge.subscribe(storeKey, (newState) => {
-            console.log(`Subscription callback for ${String(storeKey)} with state:`, newState);
             onStoreChange();
           });
         },
         () => {
           const snapshot = bridge.getSnapshot()[storeKey];
-          console.log(`getSnapshot for ${String(storeKey)}:`, snapshot);
           return snapshot;
         },
         () => {
           const snapshot = bridge.getSnapshot()[storeKey];
-          console.log(`getServerSnapshot for ${String(storeKey)}:`, snapshot);
           return snapshot;
         },
         (state) => state,
         (a, b) => a === b
       );
       
-      console.log(`StoreProvider for ${String(storeKey)} state:`, state);
       return (
         <StoreContext.Provider value={state}>
           {children}
@@ -127,7 +121,6 @@ export function createBridgeContext<TStores extends BridgeStores>() {
 
     function useStore() {
       const state = useContext(StoreContext);
-      console.log(`useStore for ${String(storeKey)}:`, state);
       return state;
     }
 
@@ -160,14 +153,12 @@ export function createBridgeContext<TStores extends BridgeStores>() {
 
     const Initialized = memo(({ children }: { children: ReactNode }) => {
       const state = useStore();
-      console.log(`Initialized for ${String(storeKey)} with state:`, state);
       return state !== null ? <>{children}</> : null;
     });
     Initialized.displayName = `StoreInitialized<${String(storeKey)}>`;
 
     const Initializing = memo(({ children }: { children: ReactNode }) => {
       const state = useStore();
-      console.log(`Initializing for ${String(storeKey)} with state:`, state);
       return state === null ? <>{children}</> : null;
     });
     Initializing.displayName = `StoreInitializing<${String(storeKey)}>`;
@@ -200,37 +191,28 @@ function useSyncExternalStoreWithSelector<Snapshot, Selection>(
   selector: (snapshot: Snapshot) => Selection,
   isEqual?: (a: Selection, b: Selection) => boolean
 ): Selection {
-  console.log('useSyncExternalStoreWithSelector called');
-  
   const lastSelection = useMemo(() => ({
     value: null as Selection | null
   }), []);
 
   const getSelection = useCallback(() => {
-    console.log('getSelection called');
     const nextSnapshot = getSnapshot();
-    console.log('nextSnapshot:', nextSnapshot);
     const nextSelection = selector(nextSnapshot);
-    console.log('nextSelection:', nextSelection);
 
     // If we have a previous selection and it's equal to the next selection, return the previous
     if (lastSelection.value !== null && isEqual?.(lastSelection.value, nextSelection)) {
-      console.log('Using previous selection (equal):', lastSelection.value);
       return lastSelection.value;
     }
 
     // Otherwise store and return the new selection
-    console.log('Using new selection:', nextSelection);
     lastSelection.value = nextSelection;
     return nextSelection;
   }, [getSnapshot, selector, isEqual]);
 
-  console.log('Calling useSyncExternalStore');
   const result = useSyncExternalStore(
     subscribe,
     getSelection,
     getServerSnapshot ? () => selector(getServerSnapshot()) : undefined
   );
-  console.log('useSyncExternalStore result:', result);
   return result;
 } 
