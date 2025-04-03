@@ -91,25 +91,16 @@ export function createMockBridge<TStores extends BridgeStores>(
     },
 
     reset: (storeKey?: keyof TStores) => {
-      console.log('MockBridge.reset called with storeKey:', storeKey);
-      console.log('Current state before reset:', JSON.stringify(state));
-      
       if (storeKey) {
-        console.log(`Resetting store: ${String(storeKey)}`);
         state[storeKey] = { ...config.stores[storeKey] };
-        console.log(`State after reset for ${String(storeKey)}:`, JSON.stringify(state[storeKey]));
         notifyListeners(storeKey);
       } else {
         // Reset all stores
-        console.log('Resetting all stores');
         for (const key in config.stores) {
           state[key as keyof TStores] = { ...config.stores[key as keyof TStores] };
-          console.log(`State after reset for ${String(key)}:`, JSON.stringify(state[key as keyof TStores]));
           notifyListeners(key as keyof TStores);
         }
       }
-      
-      console.log('Final state after reset:', JSON.stringify(state));
     },
   };
 
