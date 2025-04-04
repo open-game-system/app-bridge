@@ -2,6 +2,7 @@
   "expo": {
     "name": "App Bridge Example",
     "slug": "app-bridge-example",
+    "newArchEnabled": true,
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
