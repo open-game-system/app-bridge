@@ -1,19 +1,10 @@
-import { CounterContext } from "./bridge";
+import { Counter } from "./Counter";
 
 function App() {
-  const Counter = () => {
-    const value = CounterContext.useSelector((state) => state.value);
-    return (
-      <div>
-        <h1>Counter</h1>
-        <p>{value}</p>
-      </div>
-    );
-  };
-
   return (
-    <div>
+    <div className="container">
       <h1>App Bridge Example</h1>
+      <Counter />
     </div>
   );
 }

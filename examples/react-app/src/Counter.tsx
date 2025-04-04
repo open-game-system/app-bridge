@@ -1,18 +1,22 @@
 import { useState } from 'react';
-import { BridgeContext } from './bridge';
-
-const CounterContext = BridgeContext.createStoreContext('counter');
+import { BridgeContext, CounterContext } from './bridge';
 
 export function Counter() {
   return (
     <div className="card">
       <h2>Counter Example</h2>
       <BridgeContext.Supported>
-        <CounterContext.Initialized>
+        <CounterContext.Provider>
           <CounterControls />
           <CounterDisplay />
-        </CounterContext.Initialized>
+        </CounterContext.Provider>
+        <CounterContext.Loading>
+          <div>Waiting for counter data...</div>
+        </CounterContext.Loading>
       </BridgeContext.Supported>
+      <BridgeContext.Unsupported>
+        <div>Bridge not supported in this environment</div>
+      </BridgeContext.Unsupported>
     </div>
   );
 }
@@ -23,19 +27,19 @@ function CounterDisplay() {
 }
 
 function CounterControls() {
-  const dispatch = CounterContext.useDispatch();
-  const [value, setValue] = useState(0);
+  const store = CounterContext.useStore();
+  const [inputValue, setInputValue] = useState(0);
 
   return (
     <div>
-      <button onClick={() => dispatch({ type: 'INCREMENT' })}>+</button>
-      <button onClick={() => dispatch({ type: 'DECREMENT' })}>-</button>
+      <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>+</button>
+      <button onClick={() => store.dispatch({ type: 'DECREMENT' })}>-</button>
       <input
         type="number"
-        value={value}
-        onChange={(e) => setValue(Number(e.target.value))}
+        value={inputValue}
+        onChange={(e) => setInputValue(Number(e.target.value))}
       />
-      <button onClick={() => dispatch({ type: 'SET', value })}>Set</button>
+      <button onClick={() => store.dispatch({ type: 'SET', value: inputValue })}>Set</button>
     </div>
   );
 } 
