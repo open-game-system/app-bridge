@@ -1,108 +1,281 @@
 // Testing utilities will go here
-import type { Bridge, BridgeStores } from "../types";
+import type { Bridge, BridgeStoreDefinitions, MockStore } from "../types";
 
-export interface MockBridgeConfig<TStores extends BridgeStores> {
+/**
+ * Configuration options for creating a mock bridge
+ * @template TStores Store definitions for the bridge
+ */
+export interface MockBridgeConfig<
+  TStores extends Record<string, { state: any; events: any }>
+> {
   /**
    * Whether the bridge is supported in the current environment
-   * @default true
    */
   isSupported?: boolean;
 
   /**
-   * Store configurations. Each store can have its own state, events, and reducers.
+   * Initial state for stores in the bridge
+   * When provided, stores will be pre-initialized with these values
    */
-  stores: {
-    [K in keyof TStores]: TStores[K]["state"];
-  };
+  initialState?: Record<keyof TStores, TStores[keyof TStores]["state"]>;
 }
 
-export function createMockBridge<TStores extends BridgeStores>(
-  config: MockBridgeConfig<TStores>
-): Bridge<TStores> & {
-  reset: (storeKey?: keyof TStores) => void;
-} {
-  const state: { [K in keyof TStores]: TStores[K]["state"] | null } = {
-    ...config.stores,
-  };
-  const listeners = new Map<keyof TStores, Set<(state: any) => void>>();
+/**
+ * Extended Bridge interface with additional testing utilities
+ * @template TStores Store definitions for the bridge
+ */
+export interface MockBridge<TStores extends BridgeStoreDefinitions>
+  extends Bridge<TStores> {
+  /**
+   * Get a store by its key.
+   * Always returns a store (creating one if it doesn't exist)
+   */
+  getStore: <K extends keyof TStores>(
+    storeKey: K
+  ) => MockStore<TStores[K]["state"], TStores[K]["events"]> | undefined;
 
-  const notifyListeners = <K extends keyof TStores>(storeKey: K) => {
-    const storeListeners = listeners.get(storeKey);
-    if (storeListeners) {
-      storeListeners.forEach((listener) => listener(state[storeKey]));
+  /**
+   * Get all events that have been dispatched to a store
+   * Creates an empty event history array if one doesn't exist
+   */
+  getHistory: <K extends keyof TStores>(storeKey: K) => TStores[K]["events"][];
+
+  /**
+   * Reset a store's state and clear its event history
+   * If no storeKey is provided, resets all stores
+   */
+  reset: (storeKey?: keyof TStores) => void;
+
+  /**
+   * Set the state of a store
+   * Creates the store if it doesn't already exist
+   */
+  setState: <K extends keyof TStores>(
+    storeKey: K,
+    state: TStores[K]["state"]
+  ) => void;
+}
+
+/**
+ * Creates a mock bridge for testing purposes
+ * This implementation mimics the behavior of a real bridge but allows
+ * for more control and inspection during tests
+ *
+ * @template TStores Store definitions for the bridge
+ * @param config Configuration options for the mock bridge
+ * @returns A MockBridge instance with additional testing utilities
+ */
+export function createMockBridge<TStores extends BridgeStoreDefinitions>(
+  config: MockBridgeConfig<TStores> = {}
+): MockBridge<TStores> {
+  // Store instances by key
+  const stores = new Map<
+    keyof TStores,
+    MockStore<TStores[keyof TStores]["state"], TStores[keyof TStores]["events"]>
+  >();
+
+  // Listeners for state changes by store key
+  const stateListeners = new Map<
+    keyof TStores,
+    Set<(state: TStores[keyof TStores]["state"]) => void>
+  >();
+
+  // Listeners for store availability changes
+  const storeListeners = new Set<() => void>();
+
+  // Event history for each store
+  const eventHistory = new Map<
+    keyof TStores,
+    TStores[keyof TStores]["events"][]
+  >();
+
+  /**
+   * Notify all listeners for a specific store's state changes
+   */
+  const notifyStateListeners = <K extends keyof TStores>(storeKey: K) => {
+    const listeners = stateListeners.get(storeKey);
+    const store = stores.get(storeKey);
+    if (listeners && store) {
+      const state = store.getSnapshot();
+      if (state) {
+        listeners.forEach((listener) => listener(state));
+      }
     }
   };
 
-  const bridge = {
-    isSupported: () => config.isSupported ?? true,
-
-    getSnapshot: () => {
-      const snapshot: { [K in keyof TStores]: TStores[K]["state"] | null } =
-        {} as any;
-      for (const key in state) {
-        snapshot[key] = state[key];
-      }
-      return snapshot;
-    },
-
-    subscribe: <K extends keyof TStores>(
-      storeKey: K,
-      callback: (state: TStores[K]["state"]) => void
-    ) => {
-      if (!listeners.has(storeKey)) {
-        listeners.set(storeKey, new Set());
-      }
-      const storeListeners = listeners.get(storeKey)!;
-      storeListeners.add(callback);
-      if (state[storeKey] !== null) {
-        callback(state[storeKey]!);
-      }
-
-      return () => {
-        storeListeners.delete(callback);
-        if (storeListeners.size === 0) {
-          listeners.delete(storeKey);
-        }
-      };
-    },
-
-    dispatch: <K extends keyof TStores>(
-      storeKey: K,
-      event: TStores[K]["events"]
-    ) => {
-      if (state[storeKey] === null) return;
-
-      // In the mock bridge, we'll just increment/decrement for INCREMENT/DECREMENT events
-      // and set the value for SET events
-      if (event.type === "INCREMENT") {
-        state[storeKey] = {
-          ...state[storeKey]!,
-          value: (state[storeKey] as any).value + 1,
-        };
-      } else if (event.type === "DECREMENT") {
-        state[storeKey] = {
-          ...state[storeKey]!,
-          value: (state[storeKey] as any).value - 1,
-        };
-      } else if (event.type === "SET") {
-        state[storeKey] = { ...state[storeKey]!, value: (event as any).value };
-      }
-      notifyListeners(storeKey);
-    },
-
-    reset: (storeKey?: keyof TStores) => {
-      if (storeKey) {
-        state[storeKey] = { ...config.stores[storeKey] };
-        notifyListeners(storeKey);
-      } else {
-        // Reset all stores
-        for (const key in config.stores) {
-          state[key as keyof TStores] = { ...config.stores[key as keyof TStores] };
-          notifyListeners(key as keyof TStores);
-        }
-      }
-    },
+  /**
+   * Notify all listeners that a store's availability has changed
+   */
+  const notifyStoreListeners = () => {
+    storeListeners.forEach((listener) => listener());
   };
 
-  return bridge;
+  /**
+   * Create a new store for a specific key
+   * This is called when a store is explicitly created with state
+   */
+  const createStore = <K extends keyof TStores>(
+    storeKey: K,
+    initialState: TStores[K]["state"]
+  ) => {
+    let currentState: TStores[K]["state"] = initialState;
+
+    const store = {
+      /**
+       * Get the current state of the store
+       */
+      getSnapshot: () => {
+        return currentState;
+      },
+
+      /**
+       * Subscribe to state changes for this store
+       * Returns an unsubscribe function
+       */
+      subscribe: (listener: (state: TStores[K]["state"]) => void) => {
+        if (!stateListeners.has(storeKey)) {
+          stateListeners.set(storeKey, new Set());
+        }
+        const listeners = stateListeners.get(storeKey)!;
+        listeners.add(listener);
+
+        // Notify immediately since state must exist
+        listener(currentState);
+
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+
+      /**
+       * Dispatch an event to the store
+       * In the mock implementation, this just records the event
+       */
+      dispatch: (event: TStores[K]["events"]) => {
+        if (!eventHistory.has(storeKey)) {
+          eventHistory.set(storeKey, []);
+        }
+        eventHistory.get(storeKey)!.push(event);
+      },
+
+      /**
+       * Update the state using a producer function
+       * This allows for direct state manipulation in tests
+       */
+      produce: (producer: (state: TStores[K]["state"]) => void) => {
+        const newState = { ...currentState };
+        producer(newState);
+        currentState = newState;
+        notifyStateListeners(storeKey);
+      },
+
+      /**
+       * Reset the store to its initial state
+       * Also clears the event history
+       */
+      reset: () => {
+        const storeInitialState = config.initialState?.[storeKey];
+        if (storeInitialState) {
+          currentState = { ...storeInitialState };
+        }
+        if (eventHistory.has(storeKey)) {
+          eventHistory.get(storeKey)!.length = 0;
+        }
+        notifyStateListeners(storeKey);
+        notifyStoreListeners();
+      },
+
+      /**
+       * Directly set the state of the store
+       */
+      setState: (state: TStores[K]["state"]) => {
+        currentState = state;
+        notifyStateListeners(storeKey);
+        notifyStoreListeners();
+      },
+    } satisfies MockStore<TStores[K]["state"], TStores[K]["events"]>;
+
+    stores.set(storeKey, store);
+    return store;
+  };
+
+  // Initialize stores with initial state if provided
+  if (config.initialState) {
+    for (const [key, state] of Object.entries(config.initialState)) {
+      createStore(key as keyof TStores, state);
+    }
+  }
+
+  return {
+    /**
+     * Check if the bridge is supported
+     * In the mock implementation, this returns the configured value or true by default
+     */
+    isSupported: () => config.isSupported ?? true,
+
+    /**
+     * Get a store by its key
+     * Returns undefined if the store doesn't exist
+     */
+    getStore: <K extends keyof TStores>(storeKey: K) => {
+      return stores.get(storeKey);
+    },
+
+    /**
+     * Get the history of events dispatched to a store
+     * Creates an empty array if none exists
+     */
+    getHistory: <K extends keyof TStores>(storeKey: K) => {
+      if (!eventHistory.has(storeKey)) {
+        eventHistory.set(storeKey, []);
+      }
+      return eventHistory.get(storeKey)!;
+    },
+
+    /**
+     * Reset a specific store or all stores
+     * This resets the state and clears event history
+     */
+    reset: (storeKey?: keyof TStores) => {
+      if (storeKey) {
+        const store = stores.get(storeKey);
+        if (store) {
+          store.reset();
+        }
+      } else {
+        // Reset all stores
+        for (const [key, store] of stores.entries()) {
+          store.reset();
+        }
+      }
+    },
+
+    /**
+     * Set the state of a store
+     * Creates the store if it doesn't exist or updates state if it does
+     */
+    setState: <K extends keyof TStores>(
+      storeKey: K,
+      state: TStores[K]["state"]
+    ) => {
+      let store = stores.get(storeKey);
+      if (!store) {
+        store = createStore(storeKey, state);
+      } else {
+        store.setState(state);
+      }
+      notifyStoreListeners();
+    },
+
+    /**
+     * Subscribe to store availability changes
+     * Returns an unsubscribe function
+     */
+    subscribe: (listener) => {
+      storeListeners.add(listener);
+      return () => {
+        storeListeners.delete(listener);
+      };
+    },
+  };
 }

@@ -121,15 +121,8 @@ Store initialization is handled by the React Native host application:
 ```typescript
 // In React Native app
 const bridge = createNativeBridge<AppStores>({
-  stores: {
-    counter: {
-      initialState: { value: 0 },
-      reducers: {
-        INCREMENT: (state) => {
-          state.value += 1;
-        }
-      }
-    }
+  initialState: {
+    counter: { value: 0 }
   }
 });
 
@@ -161,19 +154,30 @@ State updates can happen in two ways:
 2. **From Web Side**
    ```typescript
    // In web app (WebView)
-   webBridge.dispatch('counter', { type: 'INCREMENT' });
    
-   // Native bridge handles the event
-   const nativeBridge = createNativeBridge<AppStores>({
-     stores: {
-       counter: {
-         initialState: { value: 0 },
-         reducers: {
-           INCREMENT: (state) => {
-             state.value += 1;
-           }
-         }
-       }
+   // First get a reference to the store
+   const webBridge = createWebBridge<AppStores>();
+   
+   // Wait for store to be initialized by native side
+   // Then get the store and dispatch events to it
+   const counterStore = webBridge.getStore('counter');
+   if (counterStore) {
+     counterStore.dispatch({ type: 'INCREMENT' });
+   }
+   
+   // Subscribe to state changes
+   if (counterStore) {
+     counterStore.subscribe(state => {
+       console.log('Counter value:', state.value);
+     });
+   }
+   
+   // You can also listen for store availability changes
+   webBridge.subscribe(() => {
+     console.log('Store availability changed');
+     const counterStore = webBridge.getStore('counter');
+     if (counterStore) {
+       console.log('Counter store is now available');
      }
    });
    ```
@@ -226,17 +230,19 @@ Testing with the bridge requires:
 ```typescript
 // Create mock bridge
 const mockBridge = createMockBridge<AppStores>({
-  stores: {
-    counter: {
-      initialState: { value: 0 },
-      reducers: {
-        INCREMENT: (state) => {
-          state.value += 1;
-        }
-      }
-    }
+  initialState: {
+    counter: { value: 0 }
   }
 });
+
+// Get store and verify state
+const counterStore = mockBridge.getStore("counter");
+if (!counterStore) throw new Error("Store not available");
+expect(counterStore.getSnapshot()).toEqual({ value: 0 });
+
+// Dispatch and verify events
+counterStore.dispatch({ type: "INCREMENT" });
+expect(mockBridge.getHistory("counter")).toEqual([{ type: "INCREMENT" }]);
 
 // Test component
 test('Counter updates correctly', () => {
@@ -249,7 +255,7 @@ test('Counter updates correctly', () => {
   );
 
   fireEvent.click(screen.getByText('+'));
-  expect(screen.getByText('Count: 1')).toBeInTheDocument();
+  expect(mockBridge.getHistory("counter")).toContainEqual({ type: "INCREMENT" });
 });
 ```
 

@@ -150,19 +150,25 @@ The system implements a layered error handling approach:
 graph TD
     subgraph Test Environment
         TC[Test Component]
-        MC[Mock Bridge]
-        MS[Mock Store]
+        MB[Mock Bridge]
+        MS1[Mock Store 1]
+        MS2[Mock Store 2]
+        EH[Event History]
     end
 
-    TC --> MC
-    MC --> MS
-    MS --> MC
-    MC --> TC
+    TC --> MB
+    MB --> MS1
+    MB --> MS2
+    MS1 --> MB
+    MS2 --> MB
+    MB --> EH
+    MB --> TC
 ```
 
 The testing architecture provides:
 
-1. Mock bridge implementation
-2. Configurable store state
-3. Event simulation
-4. State verification 
+1. Mock bridge implementation that mimics the real bridge behavior
+2. Individual mock stores with direct state manipulation
+3. Event tracking for verifying dispatched events
+4. State reset capabilities for test isolation
+5. Support for testing initialization and error scenarios 

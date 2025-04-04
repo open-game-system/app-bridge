@@ -1,13 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { bridge, BridgeContext } from "./bridge";
+import { bridge, BridgeProvider } from "./bridge";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BridgeContext.Provider bridge={bridge}>
+    <BridgeProvider bridge={bridge}>
       <App />
-    </BridgeContext.Provider>
+    </BridgeProvider>
   </React.StrictMode>
 );

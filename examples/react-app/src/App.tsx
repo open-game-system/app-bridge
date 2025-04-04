@@ -1,21 +1,19 @@
-import { useStore } from './store';
+import { CounterContext } from "./bridge";
 
 function App() {
-  const { state, dispatch } = useStore('counter');
+  const Counter = () => {
+    const value = CounterContext.useSelector((state) => state.value);
+    return (
+      <div>
+        <h1>Counter</h1>
+        <p>{value}</p>
+      </div>
+    );
+  };
 
   return (
     <div>
       <h1>App Bridge Example</h1>
-      {state === null ? (
-        <div>Loading...</div>
-      ) : (
-        <div>
-          <div>Counter: {state.value}</div>
-          <button onClick={() => dispatch({ type: 'INCREMENT' })}>Increment</button>
-          <button onClick={() => dispatch({ type: 'DECREMENT' })}>Decrement</button>
-          <button onClick={() => dispatch({ type: 'SET', value: 100 })}>Set to 100</button>
-        </div>
-      )}
     </div>
   );
 }

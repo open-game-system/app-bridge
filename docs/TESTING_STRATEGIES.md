@@ -33,29 +33,40 @@ describe('Bridge', () => {
 
   test('handles store initialization states', () => {
     const bridge = createMockBridge<AppStores>({
-      stores: {
+      initialState: {
         counter: { value: 0 }
       }
     });
 
     // Test uninitialization
+    const counterStore = bridge.getStore("counter");
+    if (!counterStore) throw new Error("Store not available");
+    
+    // Make some changes and verify they're tracked
+    counterStore.produce(state => {
+      state.value = 10;
+    });
+    expect(counterStore.getSnapshot()).toEqual({ value: 10 });
+    
+    // Reset to initial state
     bridge.reset('counter');
-    expect(bridge.getSnapshot().counter).toBeNull();
-
-    // Test resetting to initial state
-    bridge.reset();
-    expect(bridge.getSnapshot().counter).toEqual({ value: 0 });
+    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
+    expect(bridge.getHistory('counter')).toHaveLength(0);
   });
 
   test('handles events correctly', () => {
     const bridge = createMockBridge<AppStores>({
-      stores: {
+      initialState: {
         counter: { value: 0 }
       }
     });
 
-    bridge.dispatch('counter', { type: "INCREMENT" });
-    expect(bridge.getSnapshot().counter).toEqual({ value: 1 });
+    const counterStore = bridge.getStore("counter");
+    if (!counterStore) throw new Error("Store not available");
+
+    // Dispatch events and check history
+    counterStore.dispatch({ type: "INCREMENT" });
+    expect(bridge.getHistory("counter")).toEqual([{ type: "INCREMENT" }]);
   });
 });
 ```
@@ -68,33 +79,28 @@ Test bridge interactions:
 describe('Bridge Integration', () => {
   test('syncs state between stores', () => {
     const bridge = createMockBridge<AppStores>({
-      stores: {
-        counter: {
-          initialState: { value: 0 },
-          reducers: {
-            INCREMENT: (state) => {
-              state.value += 1;
-            }
-          }
-        },
-        user: {
-          initialState: { name: "Test" },
-          reducers: {
-            SET_NAME: (state, event) => {
-              state.name = event.name;
-            }
-          }
-        }
+      initialState: {
+        counter: { value: 0 },
+        user: { name: "Test" }
       }
     });
 
-    bridge.dispatch('counter', { type: "INCREMENT" });
-    bridge.dispatch('user', { type: "SET_NAME", name: "New Name" });
+    const counterStore = bridge.getStore("counter");
+    const userStore = bridge.getStore("user");
+    if (!counterStore || !userStore) throw new Error("Stores not available");
 
-    expect(bridge.getSnapshot()).toEqual({
-      counter: { value: 1 },
-      user: { name: "New Name" }
+    // Make changes to stores
+    counterStore.produce(state => {
+      state.value = 1;
     });
+    
+    userStore.produce(state => {
+      state.name = "New Name";
+    });
+
+    // Check that each store was updated independently
+    expect(counterStore.getSnapshot()).toEqual({ value: 1 });
+    expect(userStore.getSnapshot()).toEqual({ name: "New Name" });
   });
 });
 ```
@@ -106,97 +112,80 @@ describe('Store Lifecycle', () => {
   let mockBridge: MockBridge<AppStores>;
 
   beforeEach(() => {
-    // Create mock bridge with initial state and reducers
+    // Create mock bridge with initial state
     mockBridge = createMockBridge<AppStores>({
-      stores: {
-        counter: {
-          initialState: { value: 0 },
-          reducers: {
-            INCREMENT: (state) => { state.value += 1; }
-          }
-        },
-        user: {
-          initialState: { name: 'Test' }
-        }
+      initialState: {
+        counter: { value: 0 },
+        user: { name: 'Test' }
       }
     });
   });
 
   test('handles initialization states correctly', () => {
     // Test initial state
-    expect(mockBridge.getSnapshot()).toEqual({
-      counter: { value: 0 },
-      user: { name: 'Test' }
-    });
+    const counterStore = mockBridge.getStore('counter');
+    const userStore = mockBridge.getStore('user');
+    
+    expect(counterStore).toBeDefined();
+    expect(userStore).toBeDefined();
+    
+    if (!counterStore || !userStore) throw new Error("Stores not available");
+    
+    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
+    expect(userStore.getSnapshot()).toEqual({ name: 'Test' });
 
-    // Test uninitializing a store (mock bridge specific)
-    mockBridge.uninitialize('counter');
-    expect(mockBridge.getSnapshot().counter).toBeNull();
-    expect(mockBridge.getSnapshot().user).toEqual({ name: 'Test' });
-
-    // Test resetting all stores (mock bridge specific)
+    // Creating a new store via setState
+    mockBridge.setState('profile', { id: 1, avatar: 'url' });
+    const profileStore = mockBridge.getStore('profile');
+    expect(profileStore).toBeDefined();
+    
+    // Reset all stores to initial state
     mockBridge.reset();
-    expect(mockBridge.getSnapshot()).toEqual({
-      counter: { value: 0 },
-      user: { name: 'Test' }
-    });
+    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
+    expect(userStore.getSnapshot()).toEqual({ name: 'Test' });
   });
 
   test('handles component initialization correctly', () => {
-    // Start with uninitialized store
-    mockBridge.uninitialize('counter');
-
+    // Component test using mock bridge
     render(
       <BridgeContext.Provider bridge={mockBridge}>
-        <CounterContext.Initializing>
-          <div>Loading...</div>
-        </CounterContext.Initializing>
         <CounterContext.Initialized>
           <CounterComponent />
         </CounterContext.Initialized>
       </BridgeContext.Provider>
     );
 
-    // Should show loading initially
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    // Check initial render
+    expect(screen.getByText('Count: 0')).toBeInTheDocument();
 
-    // Initialize the store
-    mockBridge.produce('counter', draft => {
-      draft.value = 0;
+    // Get and update the store
+    const counterStore = mockBridge.getStore('counter');
+    if (!counterStore) throw new Error("Store not available");
+    
+    counterStore.produce(state => {
+      state.value = 5;
     });
 
-    // Should now show the counter
-    expect(screen.getByText('Count: 0')).toBeInTheDocument();
-  });
-
-  test('handles cleanup between tests', () => {
-    // Modify state
-    mockBridge.dispatch('counter', { type: 'INCREMENT' });
-    expect(mockBridge.getSnapshot().counter).toEqual({ value: 1 });
-
-    // Reset for next test (mock bridge specific)
-    mockBridge.reset();
-    expect(mockBridge.getSnapshot().counter).toEqual({ value: 0 });
+    // Verify component updated
+    expect(screen.getByText('Count: 5')).toBeInTheDocument();
   });
 });
 ```
 
-### Choosing Between Reset and Uninitialize
+### Choosing Between Reset and setState
 
-When testing store lifecycle, choose between `reset()` and `uninitialize()` based on your testing needs:
+When testing store lifecycle, you have two main options:
 
-1. Use `reset()` when:
-   - You need to restore ALL stores to their initial state from when createMockBridge was called
+1. Use `reset(storeKey?)` when:
+   - You need to restore stores to their initial state from when createMockBridge was called
    - You're cleaning up between tests
-   - You want to start fresh with known state
-   - You're testing store initialization from scratch
-   - Note: This is specific to the mock bridge and resets to the initial state from config.stores
+   - You want to clear event history
+   - If you provide a specific storeKey, only that store is reset. If no key is provided, all stores are reset.
 
-2. Use `uninitialize()` when:
-   - You're testing a single store's initialization handling
-   - You want to simulate a store becoming unavailable
-   - You're testing component behavior with uninitialized stores
-   - You need to test cleanup of specific stores
+2. Use `setState(storeKey, state)` when:
+   - You want to set a store to a specific state regardless of initial state
+   - You're creating a new store that wasn't initialized during bridge creation
+   - You need to simulate specific state scenarios for testing
 
 ### Component Testing
 
@@ -206,8 +195,9 @@ Test React components:
 describe('Component Integration', () => {
   test('handles store selection correctly', () => {
     const bridge = createMockBridge<AppStores>({
-      stores: {
-        counter: { value: 0 }
+      initialState: {
+        counter: { value: 0 },
+        user: { name: 'Test', age: 30 }
       }
     });
 
@@ -216,13 +206,9 @@ describe('Component Integration', () => {
       const counterValue = CounterContext.useSelector(state => state.value);
       const dispatch = CounterContext.useDispatch();
 
-      // Using bridge-level selector
-      const userName = BridgeContext.useSelector('user', state => state.name);
-
       return (
         <div>
           <p>Count: {counterValue}</p>
-          <p>User: {userName}</p>
           <button onClick={() => dispatch({ type: 'INCREMENT' })}>+</button>
         </div>
       );
@@ -235,81 +221,18 @@ describe('Component Integration', () => {
     );
 
     expect(screen.getByText('Count: 0')).toBeInTheDocument();
-    expect(screen.getByText('User: Test')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('+'));
-    expect(screen.getByText('Count: 1')).toBeInTheDocument();
-  });
-
-  test('handles uninitialized stores', () => {
-    const bridge = createMockBridge<AppStores>({
-      stores: {
-        counter: { value: 0 }
-      }
-    });
-
-    // Uninitialize the counter store
-    bridge.reset('counter');
-
-    function TestComponent() {
-      const value = BridgeContext.useSelector('counter', state => state?.value ?? 0);
-      return <div>Count: {value}</div>;
-    }
-
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <TestComponent />
-      </BridgeContext.Provider>
-    );
-
-    expect(screen.getByText('Count: 0')).toBeInTheDocument();
-  });
-
-  test('handles initialization states', () => {
-    const bridge = createMockBridge<AppStores>({
-      stores: {
-        counter: { value: 0 }
-      }
-    });
-
-    // Start with uninitialized store
-    bridge.reset('counter');
-
-    function TestComponent() {
-      return (
-        <>
-          <CounterContext.Initializing>
-            <div>Loading...</div>
-          </CounterContext.Initializing>
-          <CounterContext.Initialized>
-            <div>Ready!</div>
-          </CounterContext.Initialized>
-        </>
-      );
-    }
-
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <TestComponent />
-      </BridgeContext.Provider>
-    );
-
-    // Initially shows loading
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
-    expect(screen.queryByText('Ready!')).not.toBeInTheDocument();
-
-    // Initialize the store
-    bridge.dispatch('counter', { type: 'SET', value: 0 });
-
-    // Now shows ready
-    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
-    expect(screen.getByText('Ready!')).toBeInTheDocument();
+    
+    // Check event was recorded
+    const events = bridge.getHistory('counter');
+    expect(events).toEqual([{ type: 'INCREMENT' }]);
   });
 
   test('handles bridge support states', () => {
     const bridge = createMockBridge<AppStores>({
       isSupported: false,
-      stores: {
+      initialState: {
         counter: { value: 0 }
       }
     });
@@ -339,63 +262,15 @@ describe('Component Integration', () => {
 });
 ```
 
-### Error Case Testing
-
-Test error handling:
-
-```typescript
-describe('Error Handling', () => {
-  test('handles store errors gracefully', () => {
-    const mockBridge = createMockBridge<AppStores>({
-      stores: {
-        counter: { value: 0 }
-      }
-    });
-
-    render(
-      <BridgeContext.Provider bridge={mockBridge}>
-        <ErrorBoundary fallback={<ErrorComponent />}>
-          <CounterContext.Initialized>
-            <CounterComponent />
-          </CounterContext.Initialized>
-        </ErrorBoundary>
-      </BridgeContext.Provider>
-    );
-
-    // Test error handling
-    fireEvent.click(screen.getByText('Trigger Error'));
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-  });
-
-  test('handles bridge connection errors', () => {
-    const mockBridge = createMockBridge<AppStores>({
-      isSupported: false,
-      stores: {
-        counter: { value: 0 }
-      }
-    });
-
-    render(
-      <BridgeContext.Provider bridge={mockBridge}>
-        <BridgeContext.Unsupported>
-          <UnsupportedComponent />
-        </BridgeContext.Unsupported>
-      </BridgeContext.Provider>
-    );
-
-    expect(screen.getByText('Bridge not supported')).toBeInTheDocument();
-  });
-});
-```
-
 ## Mock Bridge Usage
 
 ### Basic Setup
 
 ```typescript
 const mockBridge = createMockBridge<AppStores>({
-  stores: {
-    counter: { value: 0 }
+  initialState: {
+    counter: { value: 0 },
+    user: { name: 'Test', age: 30 }
   }
 });
 ```
@@ -405,10 +280,47 @@ const mockBridge = createMockBridge<AppStores>({
 ```typescript
 const mockBridge = createMockBridge<AppStores>({
   isSupported: true,
-  stores: {
-    counter: { value: 0 }
+  initialState: {
+    counter: { value: 0 },
+    user: { name: 'Test', age: 30 }
   }
 });
+
+// Get specific stores
+const counterStore = mockBridge.getStore('counter');
+const userStore = mockBridge.getStore('user');
+
+// Work with store methods
+if (counterStore) {
+  // Listen for changes
+  const unsubscribe = counterStore.subscribe(state => {
+    console.log('Counter state updated:', state);
+  });
+  
+  // Update state directly with produce
+  counterStore.produce(state => {
+    state.value += 1;
+  });
+  
+  // Dispatch events (they're recorded but don't change state by default)
+  counterStore.dispatch({ type: 'INCREMENT' });
+  
+  // Check event history
+  const events = mockBridge.getHistory('counter');
+  console.log('Events:', events);
+  
+  // Stop listening
+  unsubscribe();
+}
+
+// Create a new store on the fly
+mockBridge.setState('settings', { theme: 'dark', notifications: true });
+
+// Reset a specific store to initial state and clear its events
+mockBridge.reset('counter');
+
+// Reset all stores to initial state and clear all events
+mockBridge.reset();
 ```
 
 ## Testing Web Applications
@@ -454,7 +366,7 @@ Test how your web app handles unsupported environments:
 test('App shows fallback when bridge is not supported', () => {
   const mockBridge = createMockBridge<AppStores>({
     isSupported: false,
-    stores: {
+    initialState: {
       counter: { value: 0 }
     }
   });
@@ -477,14 +389,8 @@ Test how components handle store initialization states:
 
 ```typescript
 test('Component shows loading state while store initializes', () => {
-  const mockBridge = createMockBridge<AppStores>({
-    stores: {
-      counter: { value: 0 }
-    }
-  });
-
-  // Start with uninitialized store by resetting to initial state
-  mockBridge.reset('counter');
+  // Create a bridge with no initial stores
+  const mockBridge = createMockBridge<AppStores>();
 
   render(
     <BridgeContext.Provider bridge={mockBridge}>
@@ -496,8 +402,8 @@ test('Component shows loading state while store initializes', () => {
 
   expect(screen.getByText('Loading...')).toBeInTheDocument();
 
-  // Simulate store initialization
-  mockBridge.dispatch('counter', { type: 'SET', value: 0 });
+  // Initialize the store
+  mockBridge.setState('counter', { value: 0 });
 
   // Verify loading state is removed
   expect(screen.queryByText('Loading...')).not.toBeInTheDocument();

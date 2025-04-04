@@ -61,38 +61,44 @@ export type AppStores = {
 ### Web Side (React)
 
 ```typescript
-// 1. Import shared types
+// 1. Import shared types and bridge functions
 import type { AppStores } from './shared/types';
+import { createWebBridge, createBridgeContext } from '@open-game-system/app-bridge';
 
-// 2. Create the bridge
-const bridge = createBridge<AppStores>();
+// 2. Create the bridge with your type
+const bridge = createWebBridge<AppStores>();
 
-// 3. Set up React context
+// 3. Create the bridge context with your type
 const BridgeContext = createBridgeContext<AppStores>();
+
+// 4. Create store contexts for each store you need
 const CounterContext = BridgeContext.createStoreContext('counter');
 
-// 4. Use in components
+// 5. Use in components
 function Counter() {
   // Using store context hooks
   const value = CounterContext.useSelector(state => state.value);
-  const dispatch = CounterContext.useDispatch();
+  const store = CounterContext.useStore();
 
   return (
     <div>
       <p>Count: {value}</p>
-      <button onClick={() => dispatch({ type: "INCREMENT" })}>+</button>
+      <button onClick={() => store.dispatch({ type: "INCREMENT" })}>+</button>
     </div>
   );
 }
 
-// 5. Wrap your app
+// 6. Wrap your app
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
       <BridgeContext.Supported>
-        <CounterContext.Initialized>
+        <CounterContext.Provider>
           <Counter />
-        </CounterContext.Initialized>
+        </CounterContext.Provider>
+        <CounterContext.Loading>
+          <div>Waiting for counter data...</div>
+        </CounterContext.Loading>
       </BridgeContext.Supported>
       <BridgeContext.Unsupported>
         <div>Bridge not supported in this environment</div>
@@ -103,7 +109,7 @@ function App() {
 
 // Error handling example
 function BadCounter() {
-  // This will throw an error if used outside of BridgeContext.Provider
+  // This will throw an error if used outside of CounterContext.Provider
   const value = CounterContext.useSelector(state => state.value);
   return <div>{value}</div>;
 }
@@ -118,10 +124,8 @@ import { WebView } from 'react-native-webview';
 
 // 2. Create the native bridge with initial state
 const bridge = createNativeBridge<AppStores>({
-  stores: {
-    counter: {
-      initialState: { value: 0 }
-    }
+  initialState: {
+    counter: { value: 0 }
   }
 });
 
@@ -160,27 +164,72 @@ function App() {
 }
 ```
 
+### Web Side (Direct Usage)
+
+```typescript
+// 1. Import shared types
+import type { AppStores } from './shared/types';
+import { createWebBridge } from '@open-game-system/app-bridge';
+
+// 2. Create the web bridge
+const bridge = createWebBridge<AppStores>();
+
+// 3. Listen for store availability
+bridge.subscribe(() => {
+  console.log('Store availability changed');
+  
+  // Check for counter store
+  const counterStore = bridge.getStore('counter');
+  if (counterStore) {
+    console.log('Counter store is now available');
+    
+    // Subscribe to state changes
+    counterStore.subscribe(state => {
+      console.log('Counter state:', state);
+      updateUI(state);
+    });
+    
+    // Dispatch events
+    document.getElementById('increment')?.addEventListener('click', () => {
+      counterStore.dispatch({ type: 'INCREMENT' });
+    });
+  }
+});
+
+// 4. Helper function to update the UI
+function updateUI(state: { value: number }) {
+  const counterElement = document.getElementById('counter');
+  if (counterElement) {
+    counterElement.textContent = `Count: ${state.value}`;
+  }
+}
+```
+
 ### Testing with Mock Bridge
 
 ```typescript
-import { createMockBridge } from '@open-game-system/app-bridge/testing';
+import { createMockBridge, createBridgeContext } from '@open-game-system/app-bridge';
 import type { AppStores } from './shared/types';
 
 describe('Counter Component', () => {
   // Create a mock bridge with initial state
   const mockBridge = createMockBridge<AppStores>({
-    stores: {
+    initialState: {
       counter: { value: 0 }
     }
   });
+  
+  // Create test-specific contexts
+  const TestBridgeContext = createBridgeContext<AppStores>();
+  const TestCounterContext = TestBridgeContext.createStoreContext('counter');
 
   it('renders and updates correctly', () => {
     render(
-      <BridgeContext.Provider bridge={mockBridge}>
-        <CounterContext.Initialized>
+      <TestBridgeContext.Provider bridge={mockBridge}>
+        <TestCounterContext.Provider>
           <Counter />
-        </CounterContext.Initialized>
-      </BridgeContext.Provider>
+        </TestCounterContext.Provider>
+      </TestBridgeContext.Provider>
     );
 
     // Test initial render
@@ -188,30 +237,44 @@ describe('Counter Component', () => {
 
     // Test user interaction
     fireEvent.click(screen.getByText('+'));
+    
+    // Verify event was dispatched
+    expect(mockBridge.getHistory('counter')).toContainEqual({ type: "INCREMENT" });
+    
+    // Update state directly for testing
+    const counterStore = mockBridge.getStore('counter');
+    if (counterStore) {
+      counterStore.produce(state => {
+        state.value = 1;
+      });
+    }
     expect(screen.getByText('Count: 1')).toBeInTheDocument();
 
-    // Test direct state updates
+    // Test reset
     mockBridge.reset('counter');
-    expect(screen.queryByText(/Count:/)).not.toBeInTheDocument();
+    expect(screen.getByText('Count: 0')).toBeInTheDocument();
   });
 
   it('handles initialization states', () => {
+    // Start with no initialized stores
+    const emptyBridge = createMockBridge<AppStores>();
+    
     render(
-      <BridgeContext.Provider bridge={mockBridge}>
-        <CounterContext.Initializing>
+      <TestBridgeContext.Provider bridge={emptyBridge}>
+        <TestCounterContext.Loading>
           <div>Loading...</div>
-        </CounterContext.Initializing>
-        <CounterContext.Initialized>
+        </TestCounterContext.Loading>
+        <TestCounterContext.Provider>
           <Counter />
-        </CounterContext.Initialized>
-      </BridgeContext.Provider>
+        </TestCounterContext.Provider>
+      </TestBridgeContext.Provider>
     );
 
     // Should show loading initially
     expect(screen.getByText('Loading...')).toBeInTheDocument();
 
     // Initialize the store
-    mockBridge.dispatch('counter', { type: 'SET', value: 0 });
+    emptyBridge.setState('counter', { value: 0 });
 
     // Should now show the counter
     expect(screen.getByText('Count: 0')).toBeInTheDocument();
@@ -220,20 +283,20 @@ describe('Counter Component', () => {
   it('handles bridge support states', () => {
     const mockBridge = createMockBridge<AppStores>({
       isSupported: false,
-      stores: {
+      initialState: {
         counter: { value: 0 }
       }
     });
 
     render(
-      <BridgeContext.Provider bridge={mockBridge}>
-        <BridgeContext.Supported>
+      <TestBridgeContext.Provider bridge={mockBridge}>
+        <TestBridgeContext.Supported>
           <Counter />
-        </BridgeContext.Supported>
-        <BridgeContext.Unsupported>
+        </TestBridgeContext.Supported>
+        <TestBridgeContext.Unsupported>
           <div>Bridge not supported</div>
-        </BridgeContext.Unsupported>
-      </BridgeContext.Provider>
+        </TestBridgeContext.Unsupported>
+      </TestBridgeContext.Provider>
     );
 
     expect(screen.getByText('Bridge not supported')).toBeInTheDocument();
@@ -245,46 +308,8 @@ describe('Counter Component', () => {
 
     expect(() => {
       render(<Counter />);
-    }).toThrow('useBridge must be used within a BridgeProvider');
+    }).toThrow('Store "counter" is not available');
 
     consoleSpy.mockRestore();
   });
 });
-```
-
-## 📱 Examples
-
-The repository includes example applications:
-
-- 🎯 `examples/react-app`: A basic React web application
-- 📱 `examples/expo-app`: An Expo/React Native application
-
-To run the examples:
-
-```bash
-# React example
-cd examples/react-app
-pnpm install
-pnpm dev
-
-# Expo example
-cd examples/expo-app
-pnpm install
-pnpm start
-```
-
-## 🛠️ Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Build the package
-pnpm build
-
-# Development mode with watch
-pnpm dev
-
-# Run tests
-pnpm test
-``` 

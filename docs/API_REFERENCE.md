@@ -3,7 +3,8 @@
 ## Table of Contents
 
 - [Core Types](#core-types)
-- [Bridge API](#bridge-api)
+- [Bridge Interfaces](#bridge-interfaces)
+- [Bridge Creation](#bridge-creation)
 - [WebView Integration](#webview-integration)
 - [React Integration API](#react-integration-api)
 - [Testing API](#testing-api)
@@ -69,11 +70,11 @@ const state: BridgeState<AppStores> = {
 };
 ```
 
-## Bridge API
+## Bridge Interfaces
 
-### `Bridge<TStores>`
+### Base Bridge Interface
 
-Base interface for web bridge implementations:
+All bridges implement this base interface:
 
 ```typescript
 export interface Bridge<TStores extends BridgeStores> {
@@ -108,65 +109,23 @@ export interface Bridge<TStores extends BridgeStores> {
 }
 ```
 
-### `createBridge<TStores>`
+### Native Bridge Interface
 
-Creates a web bridge instance for use in web applications:
-
-```typescript
-function createBridge<TStores>(): Bridge<TStores>;
-
-// Example
-const bridge = createBridge<AppStores>();
-```
-
-### `createNativeBridge<TStores>`
-
-Creates a native bridge instance for use in React Native applications:
+The native bridge extends the base bridge with additional methods for WebView management and state manipulation:
 
 ```typescript
-function createNativeBridge<TStores>(config: {
-  initialState?: { [K in keyof TStores]: TStores[K]['state'] | null };
-}): NativeBridge<TStores>;
-
-// Example
-const bridge = createNativeBridge<AppStores>({
-  initialState: {
-    counter: { value: 0 }
-  }
-});
-```
-
-## WebView Integration
-
-### `NativeBridge<TStores>`
-
-Interface for native bridge implementations:
-
-```typescript
-export interface NativeBridge<TStores extends BridgeStores> {
+export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStores> {
   /**
-   * Get the current snapshot of all stores
-   * Returns a map of store keys to their current state
-   * If a store is not initialized, its value will be null
+   * Register a WebView to receive state updates
+   * Sets up message handling and injects necessary JavaScript
    */
-  getSnapshot: () => BridgeState<TStores>;
+  registerWebView: (webView: WebView) => void;
 
   /**
-   * Subscribe to changes in a specific store's state
-   * @param storeKey The store to subscribe to
-   * @param callback The callback to be called when the store's state changes
+   * Unregister a WebView from receiving state updates
+   * Cleans up message handlers
    */
-  subscribe: <K extends keyof TStores>(
-    storeKey: K,
-    callback: (state: TStores[K]['state']) => void
-  ) => () => void;
-
-  /**
-   * Dispatch an event to a specific store
-   * @param storeKey The store to dispatch to
-   * @param event The event to dispatch
-   */
-  dispatch: <K extends keyof TStores>(storeKey: K, event: TStores[K]['events']) => void;
+  unregisterWebView: (webView: WebView) => void;
 
   /**
    * Produce a new state for a store using an immer-style recipe
@@ -174,7 +133,7 @@ export interface NativeBridge<TStores extends BridgeStores> {
    * @param recipe Function that receives a draft of the current state
    */
   produce: <K extends keyof TStores>(
-    key: K,
+    storeKey: K,
     recipe: (draft: TStores[K]['state']) => void
   ) => void;
 
@@ -189,26 +148,116 @@ export interface NativeBridge<TStores extends BridgeStores> {
   ) => void;
 
   /**
-   * Register a WebView with the bridge
-   * This sets up bidirectional communication between the native app and the WebView:
-   * 1. Injects the necessary JavaScript into the WebView to handle state updates
-   * 2. Sets up the WebView's onMessage handler to receive events from the web side
-   * 3. Sends the initial state to the WebView
-   * 4. Ensures the WebView receives state updates when the native state changes
-   * 
-   * @param webView The WebView instance to register
+   * Reset a store to its initial state
+   * @param storeKey Optional store key to reset only a specific store
    */
-  registerWebView: (webView: WebView) => void;
-
-  /**
-   * Unregister a WebView from receiving state updates
-   * This cleans up the message handlers and stops sending state updates to the WebView
-   * 
-   * @param webView The WebView instance to unregister
-   */
-  unregisterWebView: (webView: WebView) => void;
+  reset: (storeKey?: keyof TStores) => void;
 }
 ```
+
+### Mock Bridge Interface
+
+The mock bridge extends the base bridge with testing-specific functionality:
+
+```typescript
+export interface MockBridge<TStores extends BridgeStores>
+  extends Bridge<TStores> {
+  /**
+   * Get a store by its key.
+   * Returns undefined if the store doesn't exist
+   */
+  getStore: <K extends keyof TStores>(
+    storeKey: K
+  ) => MockStore<TStores[K]["state"], TStores[K]["events"]> | undefined;
+
+  /**
+   * Get all events that have been dispatched to a store
+   */
+  getHistory: <K extends keyof TStores>(storeKey: K) => TStores[K]["events"][];
+
+  /**
+   * Reset a store's state and clear its event history
+   * If no storeKey is provided, resets all stores
+   */
+  reset: (storeKey?: keyof TStores) => void;
+
+  /**
+   * Set the state of a store
+   * Creates the store if it doesn't exist or updates its state if it does
+   */
+  setState: <K extends keyof TStores>(
+    storeKey: K,
+    state: TStores[K]["state"]
+  ) => void;
+}
+```
+
+## Bridge Creation
+
+### `createWebBridge<TStores>`
+
+Creates a web bridge instance for use in web applications:
+
+```typescript
+function createWebBridge<TStores extends BridgeStores>(): Bridge<TStores>
+
+// Example
+const bridge = createWebBridge<AppStores>();
+```
+
+The web bridge automatically receives its state from the native side through WebView messages.
+
+### `createNativeBridge<TStores>`
+
+Creates a native bridge instance for use in React Native applications:
+
+```typescript
+function createNativeBridge<TStores extends BridgeStores>(
+  config: {
+    initialState?: { [K in keyof TStores]: TStores[K]['state'] | null };
+  } = {}
+): NativeBridge<TStores>
+
+// Example
+const bridge = createNativeBridge<AppStores>({
+  initialState: {
+    counter: { value: 0 }
+  }
+});
+```
+
+### `createMockBridge<TStores>`
+
+Creates a mock bridge instance for testing:
+
+```typescript
+function createMockBridge<TStores extends BridgeStores>(
+  config?: {
+    /**
+     * Whether the bridge is supported in the current environment
+     * @default true
+     */
+    isSupported?: boolean;
+
+    /**
+     * Initial state for stores in the bridge
+     * When provided, stores will be pre-initialized with these values
+     */
+    initialState?: Record<keyof TStores, TStores[keyof TStores]["state"]>;
+  }
+): MockBridge<TStores>
+
+// Example
+const bridge = createMockBridge<AppStores>({
+  isSupported: true,
+  initialState: {
+    counter: { value: 0 },
+    user: { name: "John", age: 30 }
+  }
+});
+```
+
+## WebView Integration
 
 ### WebView Setup
 
@@ -276,235 +325,368 @@ The messages exchanged between the native and web sides follow a specific format
 
 The bridge automatically handles the serialization and deserialization of these messages, so you don't need to worry about the details.
 
-### Multiple WebViews
-
-The bridge supports multiple WebViews, each receiving the same state updates:
-
-```typescript
-function App() {
-  const game1Ref = useRef<WebView>(null);
-  const game2Ref = useRef<WebView>(null);
-
-  useEffect(() => {
-    // Register both WebViews
-    bridge.registerWebView(game1Ref.current);
-    bridge.registerWebView(game2Ref.current);
-
-    // Cleanup on unmount
-    return () => {
-      bridge.unregisterWebView(game1Ref.current);
-      bridge.unregisterWebView(game2Ref.current);
-    };
-  }, []);
-
-  return (
-    <View style={{ flex: 1 }}>
-      <WebView
-        ref={game1Ref}
-        source={{ uri: 'https://game1-url.com' }}
-      />
-      <WebView
-        ref={game2Ref}
-        source={{ uri: 'https://game2-url.com' }}
-      />
-    </View>
-  );
-}
-```
-
 ## React Integration API
 
 ### `createBridgeContext<TStores>`
 
-Creates a namespace object containing the bridge context provider and helper methods:
+Creates a namespace object containing the bridge context provider and helper components. You must always provide your store types as a type parameter:
 
 ```typescript
-function createBridgeContext<TStores extends BridgeStores>() {
-  return {
-    Provider: React.ComponentType<BridgeProviderProps<TStores>>;
-    useBridge: () => Bridge<TStores>;
-    Supported: React.ComponentType<{ children: React.ReactNode }>;
-    Unsupported: React.ComponentType<{ children: React.ReactNode }>;
-    createStoreContext: <TKey extends keyof TStores>(storeKey: TKey) => StoreContext<TStores[TKey]>;
-  }
-}
+import { createBridgeContext } from '@open-game-system/app-bridge';
+import type { AppStores } from './shared/types';
 
-// Example
+// Always create a context with your specific store types
 const BridgeContext = createBridgeContext<AppStores>();
+```
+
+The returned object includes:
+
+```typescript
+{
+  Provider: React.ComponentType<{ bridge: Bridge<TStores>; children: ReactNode }>;
+  Supported: React.ComponentType<{ children: ReactNode }>;
+  Unsupported: React.ComponentType<{ children: ReactNode }>;
+  createStoreContext: <K extends keyof TStores>(storeKey: K) => StoreContext<TStores, K>;
+}
 ```
 
 ### `BridgeContext.Provider`
 
-The top-level provider component:
+The top-level provider component that makes the bridge available to all children:
 
 ```typescript
-interface BridgeProviderProps<TStores> {
-  bridge: Bridge<TStores>;
-  children: React.ReactNode;
-}
+import { createWebBridge, createBridgeContext } from '@open-game-system/app-bridge';
+import type { AppStores } from './shared/types';
+
+const bridge = createWebBridge<AppStores>();
+const BridgeContext = createBridgeContext<AppStores>();
 
 // Example
-<BridgeContext.Provider bridge={bridge}>
-  <App />
-</BridgeContext.Provider>
-```
-
-### `createStoreContext`
-
-Creates a store context for a specific feature store:
-
-```typescript
-// Example
-const CounterContext = BridgeContext.createStoreContext('counter');
-
-function CounterComponent() {
-  const value = CounterContext.useSelector(state => state.value);
-  const dispatch = CounterContext.useDispatch();
-
-  return (
-    <div>
-      <p>Count: {value}</p>
-      <button onClick={() => dispatch({ type: "INCREMENT" })}>+</button>
-    </div>
-  );
-}
-```
-
-The returned store context provides:
-
-```typescript
-interface StoreContext<StoreState, StoreEvents> {
-  useStore: () => Store<StoreState, StoreEvents> | null;
-  useSelector: <T>(selector: (state: StoreState) => T) => T;
-  useDispatch: () => (event: StoreEvents) => void;
-  Initializing: React.ComponentType<{ children: React.ReactNode }>;
-  Initialized: React.ComponentType<{ children: React.ReactNode }>;
-}
-```
-
-### Bridge Context Selectors
-
-The bridge context provides a top-level `useSelector` hook that can select from any store:
-
-```typescript
-function App() {
-  // Select from any store using the store key and a selector
-  const counterValue = BridgeContext.useSelector('counter', state => state.value);
-  const userData = BridgeContext.useSelector('user', state => state.name);
-
-  return (
-    <div>
-      <p>Counter: {counterValue}</p>
-      <p>User: {userData}</p>
-    </div>
-  );
-}
-```
-
-The bridge context's `useSelector` hook has the following signature:
-
-```typescript
-function useSelector<K extends keyof TStores, T>(
-  storeKey: K,
-  selector: (state: TStores[K]['state']) => T
-): T;
-```
-
-This allows you to:
-1. Select from any store without creating a store context
-2. Access multiple stores in a single component
-3. Keep the type safety of the store's state type
-
-### Store Initialization
-
-Stores can be initialized and uninitialized using the native bridge's `setState` method:
-
-```typescript
-// Initialize a store
-nativeBridge.setState('counter', { value: 0 });
-
-// Uninitialize a store
-nativeBridge.setState('counter', null);
-```
-
-Components can handle initialization states using the `Initializing` and `Initialized` components:
-
-```typescript
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
-      <CounterContext.Initializing>
-        <div>Loading...</div>
-      </CounterContext.Initializing>
-      <CounterContext.Initialized>
-        <Counter />
-      </CounterContext.Initialized>
+      {/* App content */}
     </BridgeContext.Provider>
   );
 }
 ```
 
-### Bridge Support
+### `BridgeContext.Supported` and `BridgeContext.Unsupported`
 
-The bridge provides components to handle supported and unsupported environments:
+Conditional render components that only render their children when the bridge is or isn't supported:
 
 ```typescript
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
       <BridgeContext.Supported>
-        <Game />
+        <p>Bridge is supported in this environment!</p>
+        <GameComponent />
       </BridgeContext.Supported>
       <BridgeContext.Unsupported>
-        <Fallback />
+        <p>Bridge is not supported here. Please use the native app.</p>
       </BridgeContext.Unsupported>
     </BridgeContext.Provider>
   );
 }
 ```
 
-## Testing API
+### `createStoreContext<K>`
 
-### `createMockBridge<TStores>`
-
-Creates a mock bridge instance for testing. The mock bridge extends the `Bridge` interface with additional testing-specific methods:
+Creates a store context for a specific store key:
 
 ```typescript
-interface MockBridge<TStores extends BridgeStores> extends Bridge<TStores> {
-  /**
-   * Reset the mock bridge's state to its initial values from when createMockBridge was called
-   * @param storeKey Optional store key to reset only a specific store
-   * 
-   * Note: This method is specific to the mock bridge and is not available on the native bridge.
-   * When called, it will:
-   * 1. Reset the specified store(s) to their initial state from config.stores
-   * 2. If a store wasn't initialized with an initial state, its state remains unchanged
-   * 3. Always clears the dispatch history
-   */
-  reset: (storeKey?: keyof TStores) => void;
+const CounterContext = BridgeContext.createStoreContext('counter');
+const UserContext = BridgeContext.createStoreContext('user');
+```
+
+The returned object includes:
+
+```typescript
+{
+  Provider: React.ComponentType<{ children: ReactNode }>;
+  Loading: React.ComponentType<{ children: ReactNode }>;
+  useStore: () => Store<TStores[K]["state"], TStores[K]["events"]>;
+  useSelector: <T>(selector: (state: TStores[K]["state"]) => T) => T;
+}
+```
+
+### Store Context Components
+
+#### `StoreContext.Provider`
+
+Component that makes a specific store available to its children. This component only renders when the store is available (initialized):
+
+```typescript
+function App() {
+  return (
+    <BridgeContext.Provider bridge={bridge}>
+      <CounterContext.Provider>
+        {/* Only rendered when counter store is initialized */}
+        <CounterComponent />
+      </CounterContext.Provider>
+    </BridgeContext.Provider>
+  );
+}
+```
+
+#### `StoreContext.Loading`
+
+Component that renders its children only when the bridge is supported but the store is not yet available:
+
+```typescript
+function App() {
+  return (
+    <BridgeContext.Provider bridge={bridge}>
+      <CounterContext.Provider>
+        <CounterDisplay />
+      </CounterContext.Provider>
+      <CounterContext.Loading>
+        <LoadingSpinner />
+      </CounterContext.Loading>
+    </BridgeContext.Provider>
+  );
+}
+```
+
+### Store Hooks
+
+#### `useStore()`
+
+Hook to get the store instance for a specific store. Must be used within a `StoreContext.Provider`:
+
+```typescript
+function Counter() {
+  const store = CounterContext.useStore();
+  
+  // Now you can directly interact with the store
+  const state = store.getSnapshot();
+  
+  return (
+    <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>
+      Count: {state.value}
+    </button>
+  );
+}
+```
+
+This hook will throw an error if used outside of a `StoreContext.Provider`.
+
+#### `useSelector(selector)`
+
+Hook to select and subscribe to a specific piece of data from the store:
+
+```typescript
+function Counter() {
+  // Will throw if not used inside CounterContext.Provider
+  const count = CounterContext.useSelector(state => state.value);
+  const store = CounterContext.useStore();
+  
+  return (
+    <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>
+      Count: {count}
+    </button>
+  );
+}
+```
+
+## Complete Example
+
+```tsx
+// shared/types.ts
+import { BridgeStoreDefinitions, State } from '@open-game-system/app-bridge';
+
+export interface CounterState extends State {
+  value: number;
 }
 
-function createMockBridge<TStores>(config: {
-  isSupported?: boolean;
-  stores?: { [K in keyof TStores]: TStores[K]['state'] };
-  reducers?: {
-    [K in keyof TStores]?: (
-      state: TStores[K]['state'],
-      event: TStores[K]['events']
-    ) => TStores[K]['state'];
-  };
-}): MockBridge<TStores>;
+export type CounterEvent = 
+  | { type: 'INCREMENT' }
+  | { type: 'DECREMENT' }
+  | { type: 'SET'; value: number };
 
-// Example
-const bridge = createMockBridge<AppStores>({
-  stores: {
+export interface AppStores extends BridgeStoreDefinitions {
+  counter: {
+    state: CounterState;
+    events: CounterEvent;
+  };
+}
+
+// App.tsx
+import { createBridgeContext, createWebBridge } from '@open-game-system/app-bridge';
+import type { AppStores } from './shared/types';
+
+// Create the bridge
+const bridge = createWebBridge<AppStores>();
+
+// Create contexts
+const BridgeContext = createBridgeContext<AppStores>();
+const CounterContext = BridgeContext.createStoreContext('counter');
+
+function Counter() {
+  // Only available inside CounterContext.Provider
+  const count = CounterContext.useSelector(state => state.value);
+  const store = CounterContext.useStore();
+  
+  return (
+    <div>
+      <h1>Counter: {count}</h1>
+      <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>+</button>
+      <button onClick={() => store.dispatch({ type: 'DECREMENT' })}>-</button>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <BridgeContext.Provider bridge={bridge}>
+      <BridgeContext.Supported>
+        {/* Counter store integration */}
+        <CounterContext.Provider>
+          <Counter />
+        </CounterContext.Provider>
+        <CounterContext.Loading>
+          <p>Waiting for counter data...</p>
+        </CounterContext.Loading>
+      </BridgeContext.Supported>
+      <BridgeContext.Unsupported>
+        <p>This app must be run inside the native app.</p>
+      </BridgeContext.Unsupported>
+    </BridgeContext.Provider>
+  );
+}
+```
+
+## Testing with React
+
+When testing React components that use the bridge, you should create test-specific contexts using the mock bridge:
+
+```tsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import { createMockBridge, createBridgeContext } from '@open-game-system/app-bridge';
+import type { AppStores } from './shared/types';
+
+// Test-specific bridge
+const mockBridge = createMockBridge<AppStores>({
+  initialState: {
     counter: { value: 0 }
   }
 });
+
+// Test-specific contexts
+const TestBridgeContext = createBridgeContext<AppStores>();
+const TestCounterContext = TestBridgeContext.createStoreContext('counter');
+
+test('Counter increments when clicked', () => {
+  render(
+    <TestBridgeContext.Provider bridge={mockBridge}>
+      <TestCounterContext.Provider>
+        <Counter />
+      </TestCounterContext.Provider>
+    </TestBridgeContext.Provider>
+  );
+  
+  // Initial state
+  expect(screen.getByText('Counter: 0')).toBeInTheDocument();
+  
+  // Click the increment button
+  fireEvent.click(screen.getByText('+'));
+  
+  // Check that the event was dispatched
+  const counterStore = mockBridge.getStore('counter');
+  expect(mockBridge.getHistory('counter')).toEqual([{ type: 'INCREMENT' }]);
+  
+  // Update the state to simulate what would happen in the real app
+  if (counterStore) {
+    counterStore.produce(state => {
+      state.value = 1;
+    });
+  }
+  
+  // Check that the UI updated
+  expect(screen.getByText('Counter: 1')).toBeInTheDocument();
+});
 ```
 
-The mock bridge is useful for testing web components that use the bridge, as it provides a way to:
-1. Initialize state for testing
-2. Reset state between tests to the initial state from when createMockBridge was called
-3. Verify event dispatches
-4. Test state updates
+## Testing API
+
+### Mock Bridge Features
+
+The mock bridge provides several testing-specific features:
+
+1. **Automatic Event Handling**:
+   - Automatically handles common event types (INCREMENT, DECREMENT, SET)
+   - Simulates state updates based on dispatched events
+
+2. **State Management**:
+   - Maintains initial state for reset functionality
+   - Supports testing state updates and subscriptions
+
+3. **Support Testing**:
+   - Allows testing bridge support states through `isSupported` configuration
+   - Simulates WebView communication for testing
+
+4. **Reset Functionality**:
+   - Supports resetting individual stores or all stores
+   - Maintains initial state for accurate testing
+
+Example usage:
+
+```typescript
+describe('Counter Component', () => {
+  const mockBridge = createMockBridge<AppStores>({
+    isSupported: true,
+    initialState: {
+      counter: { value: 0 }
+    }
+  });
+
+  it('handles state updates', () => {
+    // Get the store
+    const counterStore = mockBridge.getStore('counter');
+    if (!counterStore) throw new Error("Store not available");
+    
+    // Test initial state
+    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
+
+    // Dispatch events and check they're recorded
+    counterStore.dispatch({ type: 'INCREMENT' });
+    expect(mockBridge.getHistory('counter')).toEqual([{ type: 'INCREMENT' }]);
+    
+    // Update state directly
+    counterStore.produce(state => {
+      state.value = 1;
+    });
+    expect(counterStore.getSnapshot()).toEqual({ value: 1 });
+
+    // Test reset
+    mockBridge.reset('counter');
+    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
+    expect(mockBridge.getHistory('counter')).toHaveLength(0);
+  });
+
+  it('handles subscriptions', () => {
+    const counterStore = mockBridge.getStore('counter');
+    if (!counterStore) throw new Error("Store not available");
+    
+    const listener = vi.fn();
+    const unsubscribe = counterStore.subscribe(listener);
+
+    // Initial state notification
+    expect(listener).toHaveBeenCalledWith({ value: 0 });
+
+    // State update via produce
+    counterStore.produce(state => {
+      state.value = 1;
+    });
+    expect(listener).toHaveBeenCalledWith({ value: 1 });
+
+    // Unsubscribe
+    unsubscribe();
+    counterStore.produce(state => {
+      state.value = 2;
+    });
+    expect(listener).toHaveBeenCalledTimes(2); // Initial + first produce
+  });
+});
+```

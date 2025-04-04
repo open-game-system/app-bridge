@@ -3,21 +3,27 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWebBridge } from './index';
-import type { BridgeStores } from '../types';
+import { BridgeStoreDefinitions, State, Event } from '../types';
+import { Operation } from 'fast-json-patch';
 
-interface CounterState {
+// Define test-specific types
+interface CounterState extends State {
   value: number;
 }
 
-interface CounterEvents {
-  type: 'INCREMENT' | 'DECREMENT' | 'SET';
-  value?: number;
-}
+type CounterEvent =
+  | {
+      type: 'SET';
+      value: number;
+    }
+  | {
+      type: 'INCREMENT' | 'DECREMENT';
+    };
 
-interface TestStores extends BridgeStores {
+interface TestStores extends BridgeStoreDefinitions {
   counter: {
     state: CounterState;
-    events: CounterEvents;
+    events: CounterEvent;
   };
 }
 
@@ -50,40 +56,145 @@ describe('Web Bridge', () => {
     });
   });
 
-  describe('getSnapshot', () => {
-    it('returns empty state initially', () => {
-      expect(bridge.getSnapshot()).toEqual({});
+  describe('getStore', () => {
+    it('returns undefined for uninitialize stores', () => {
+      // No state has been initialized yet
+      const store = bridge.getStore('counter');
+      expect(store).toBeUndefined();
     });
 
-    it('returns updated state after receiving state update message', () => {
-      const stateUpdate = {
-        type: 'STATE_UPDATE',
+    it('returns the same store instance for the same key', () => {
+      // First initialize a store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      // Now we can get the store
+      const store1 = bridge.getStore('counter');
+      const store2 = bridge.getStore('counter');
+      expect(store1).toBeDefined();
+      expect(store2).toBeDefined();
+      expect(store1).toBe(store2);
+    });
+
+    it('returns a store with the correct methods', () => {
+      // Initialize store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      expect(store).toBeDefined();
+      if (!store) throw new Error('Store not available');
+      
+      expect(store.getSnapshot).toBeDefined();
+      expect(store.subscribe).toBeDefined();
+      expect(store.dispatch).toBeDefined();
+    });
+
+    it('getSnapshot returns state immediately after initialization', () => {
+      // Initialize store
+      const stateInit = {
+        type: 'STATE_INIT',
         storeKey: 'counter',
         data: { value: 42 }
       };
 
-      // Simulate message from native
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+      expect(store.getSnapshot()).toEqual({ value: 42 });
+    });
+
+    it('getSnapshot returns updated state after receiving state update message', () => {
+      // First initialize the state
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+
+      // Then update it with patch operations
+      const stateUpdate = {
+        type: 'STATE_UPDATE',
+        storeKey: 'counter',
+        operations: [
+          { op: 'replace', path: '/value', value: 42 }
+        ] as Operation[]
+      };
+
       window.dispatchEvent(
         new MessageEvent('message', {
           data: JSON.stringify(stateUpdate)
         })
       );
 
-      expect(bridge.getSnapshot()).toEqual({
-        counter: { value: 42 }
-      });
+      expect(store.getSnapshot()).toEqual({ value: 42 });
     });
-  });
 
-  describe('subscribe', () => {
-    it('notifies listeners of state changes', () => {
+    it('subscribe notifies listeners of state changes', () => {
+      // Initialize store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+      
       const listener = vi.fn();
-      bridge.subscribe('counter', listener);
+      store.subscribe(listener);
 
+      // Listener should be called immediately with current state
+      expect(listener).toHaveBeenCalledWith({ value: 0 });
+      
+      // Reset the mock to see if it's called again with updates
+      listener.mockReset();
+
+      // Send update
       const stateUpdate = {
         type: 'STATE_UPDATE',
         storeKey: 'counter',
-        data: { value: 42 }
+        operations: [
+          { op: 'replace', path: '/value', value: 42 }
+        ] as Operation[]
       };
 
       window.dispatchEvent(
@@ -95,15 +206,40 @@ describe('Web Bridge', () => {
       expect(listener).toHaveBeenCalledWith({ value: 42 });
     });
 
-    it('allows unsubscribing', () => {
+    it('subscribe allows unsubscribing', () => {
+      // Initialize store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+      
       const listener = vi.fn();
-      const unsubscribe = bridge.subscribe('counter', listener);
+      const unsubscribe = store.subscribe(listener);
+      
+      // Should be called immediately with current state
+      expect(listener).toHaveBeenCalledWith({ value: 0 });
+      listener.mockReset();
+      
+      // Unsubscribe
       unsubscribe();
 
+      // Send update
       const stateUpdate = {
         type: 'STATE_UPDATE',
         storeKey: 'counter',
-        data: { value: 42 }
+        operations: [
+          { op: 'replace', path: '/value', value: 42 }
+        ] as Operation[]
       };
 
       window.dispatchEvent(
@@ -114,12 +250,26 @@ describe('Web Bridge', () => {
 
       expect(listener).not.toHaveBeenCalled();
     });
-  });
 
-  describe('dispatch', () => {
-    it('sends events to native through postMessage', () => {
-      const event: CounterEvents = { type: 'INCREMENT' };
-      bridge.dispatch('counter', event);
+    it('dispatch sends events to native through postMessage', () => {
+      // Initialize store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+      
+      const event: CounterEvent = { type: 'INCREMENT' };
+      store.dispatch(event);
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         JSON.stringify({
@@ -130,12 +280,58 @@ describe('Web Bridge', () => {
       );
     });
 
-    it('warns but does not throw when ReactNativeWebView is not available', () => {
+    it('dispatch sends SET events with value to native through postMessage', () => {
+      // Initialize store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+      
+      const event: CounterEvent = { type: 'SET', value: 42 };
+      store.dispatch(event);
+
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'EVENT',
+          storeKey: 'counter',
+          event
+        })
+      );
+    });
+
+    it('dispatch warns but does not throw when ReactNativeWebView is not available', () => {
+      // Initialize store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+      
+      // Remove ReactNativeWebView
       delete (window as any).ReactNativeWebView;
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const event: CounterEvents = { type: 'INCREMENT' };
-      bridge.dispatch('counter', event);
+      const event: CounterEvent = { type: 'INCREMENT' };
+      store.dispatch(event);
 
       expect(consoleSpy).toHaveBeenCalledWith(
         'Cannot dispatch events: ReactNativeWebView not available'
@@ -143,6 +339,49 @@ describe('Web Bridge', () => {
       expect(mockPostMessage).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('bridge.subscribe', () => {
+    it('notifies listeners when stores become available', () => {
+      const availabilityListener = vi.fn();
+      const unsubscribe = bridge.subscribe(availabilityListener);
+      
+      expect(availabilityListener).not.toHaveBeenCalled();
+      
+      // Initialize a store
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+      
+      expect(availabilityListener).toHaveBeenCalled();
+      
+      // Can unsubscribe
+      unsubscribe();
+      availabilityListener.mockReset();
+      
+      // Initialize another store
+      const stateInit2 = {
+        type: 'STATE_INIT',
+        storeKey: 'user',
+        data: { name: 'John' }
+      };
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit2)
+        })
+      );
+      
+      expect(availabilityListener).not.toHaveBeenCalled();
     });
   });
 
@@ -165,9 +404,26 @@ describe('Web Bridge', () => {
     });
 
     it('ignores messages with unknown types', () => {
-      const listener = vi.fn();
-      bridge.subscribe('counter', listener);
+      // First initialize the store so we can get it
+      const stateInit = {
+        type: 'STATE_INIT',
+        storeKey: 'counter',
+        data: { value: 0 }
+      };
 
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify(stateInit)
+        })
+      );
+
+      const store = bridge.getStore('counter');
+      if (!store) throw new Error('Store not available');
+      
+      const listener = vi.fn();
+      store.subscribe(listener);
+      listener.mockReset(); // Clear the initial notification
+      
       const unknownMessage = {
         type: 'UNKNOWN',
         storeKey: 'counter',

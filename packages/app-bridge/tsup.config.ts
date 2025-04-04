@@ -16,7 +16,7 @@ export default defineConfig({
   outDir: 'dist',
   target: 'es2015',
   minify: false,
-  external: ['react', 'react-native'],
+  external: ['react'],
   treeshake: true,
   esbuildOptions(options) {
     options.target = 'es2015';

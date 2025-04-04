@@ -1,15 +1,27 @@
-import React, {
+import {
   createContext,
   memo,
   ReactNode,
   useCallback,
   useContext,
   useMemo,
-  useSyncExternalStore
+  useSyncExternalStore,
 } from "react";
-import type { Bridge, BridgeStores, State } from "../types";
+import type {
+  Bridge,
+  BridgeStoreDefinitions,
+  Store,
+} from "../types";
 
-export function createBridgeContext<TStores extends BridgeStores>() {
+interface BridgeContextValue<TStores extends BridgeStoreDefinitions> {
+  bridge: Bridge<TStores>;
+}
+
+/**
+ * Creates a context and hooks for interacting with the bridge
+ * @returns A set of components and hooks for interacting with the bridge
+ */
+function createBridgeContext<TStores extends BridgeStoreDefinitions>() {
   // Create a dummy bridge that throws on any method call
   const throwBridge = new Proxy({} as Bridge<TStores>, {
     get() {
@@ -19,60 +31,166 @@ export function createBridgeContext<TStores extends BridgeStores>() {
     },
   });
 
-  const BridgeContext = createContext<Bridge<TStores>>(throwBridge);
-
-  const Provider = memo(({ 
-    children, 
-    bridge 
-  }: { 
-    children: ReactNode;
-    bridge: Bridge<TStores>;
-  }) => {
-    return (
-      <BridgeContext.Provider value={bridge}>
-        {children}
-      </BridgeContext.Provider>
-    );
+  const BridgeContext = createContext<BridgeContextValue<TStores>>({
+    bridge: throwBridge,
   });
+
+  const Provider = memo(
+    ({
+      children,
+      bridge,
+    }: {
+      children: ReactNode;
+      bridge: Bridge<TStores>;
+    }) => {
+      return (
+        <BridgeContext.Provider value={{ bridge }}>
+          {children}
+        </BridgeContext.Provider>
+      );
+    }
+  );
   Provider.displayName = "BridgeProvider";
 
+  /**
+   * Internal hook to access the bridge instance
+   * @returns The bridge instance
+   * @internal
+   */
   function useBridge(): Bridge<TStores> {
-    const bridge = useContext(BridgeContext);
-    return bridge;
+    const context = useContext(BridgeContext);
+    return context.bridge;
   }
 
-  function useSelector<K extends keyof TStores, T extends State>(
-    storeKey: K,
-    selector: (state: TStores[K]["state"]) => T
-  ): T {
-    const bridge = useBridge();
-    const memoizedSelector = useMemo(() => selector, [selector]);
+  /**
+   * Create a set of hooks and components for interacting with a specific store
+   * @param storeKey The key of the store to interact with
+   * @returns A set of hooks and components for the specific store
+   */
+  function createStoreContext<K extends keyof TStores>(storeKey: K) {
+    type StoreType = Store<TStores[K]["state"], TStores[K]["events"]>;
+    type StoreState = TStores[K]["state"];
     
-    return useSyncExternalStoreWithSelector(
-      (onStoreChange) => bridge.subscribe(storeKey, onStoreChange),
-      () => {
-        const snapshot = bridge.getSnapshot()[storeKey];
-        return snapshot !== null ? memoizedSelector(snapshot) : memoizedSelector({} as TStores[K]["state"]);
+    // Create a dummy store that throws on any method call
+    const throwStore = new Proxy({} as StoreType, {
+      get() {
+        throw new Error(
+          `Store "${String(storeKey)}" is not available. Make sure to use the store hooks inside a StoreContext.Provider.`
+        );
       },
-      () => {
-        const snapshot = bridge.getSnapshot()[storeKey];
-        return snapshot !== null ? memoizedSelector(snapshot) : memoizedSelector({} as TStores[K]["state"]);
-      },
-      memoizedSelector,
-      (a, b) => a === b
-    );
+    });
+    
+    // Create a context with a throw store as default - this ensures type safety
+    // while still throwing helpful errors when accessed outside a provider
+    const StoreContext = createContext<StoreType>(throwStore);
+    StoreContext.displayName = `Store<${String(storeKey)}>`;
+
+    /**
+     * Provider component that automatically subscribes to store availability 
+     * and provides the store when it becomes available
+     */
+    const Provider = memo(({ children }: { children: ReactNode }) => {
+      const bridge = useBridge();
+      
+      // Subscribe to store availability
+      const getStore = useCallback(() => {
+        return bridge.getStore(storeKey) || null;
+      }, [bridge]);
+      
+      // Subscribe to changes in store availability
+      const subscribe = useCallback((callback: () => void) => {
+        return bridge.subscribe(callback);
+      }, [bridge]);
+      
+      // Use sync external store to track store availability
+      const store = useSyncExternalStore(
+        subscribe,
+        getStore,
+        getStore // Same for server
+      );
+      
+      // Only render children if store is available
+      if (!store) return null;
+      
+      return (
+        <StoreContext.Provider value={store}>
+          {children}
+        </StoreContext.Provider>
+      );
+    });
+    Provider.displayName = `Store.Provider<${String(storeKey)}>`;
+
+    /**
+     * Loading component that renders children only when the bridge is supported 
+     * but the store is not yet available
+     */
+    const Loading = memo(({ children }: { children: ReactNode }) => {
+      const bridge = useBridge();
+      
+      // Check if bridge is supported - this is a static property that won't change
+      const isSupported = bridge.isSupported();
+      
+      // Only subscribe to store availability if bridge is supported
+      const getStoreAvailability = useCallback(() => {
+        return bridge.getStore(storeKey);
+      }, [bridge]);
+      
+      // Subscribe to changes in store availability
+      const subscribe = useCallback((callback: () => void) => {
+        return bridge.subscribe(callback);
+      }, [bridge]);
+      
+      // Use sync external store to track store availability
+      const store = useSyncExternalStore(
+        subscribe,
+        getStoreAvailability,
+        getStoreAvailability // Same for server
+      );
+      
+      // Only render children if bridge is supported but store is not available
+      return isSupported && !store ? <>{children}</> : null;
+    });
+    Loading.displayName = `Store.Loading<${String(storeKey)}>`;
+
+    /**
+     * Hook to access the store.
+     * Must be used inside a Store.Provider component.
+     * @throws Error if used outside of Store.Provider
+     * @returns The store instance
+     */
+    function useStore(): StoreType {
+      return useContext(StoreContext);
+    }
+
+    /**
+     * Hook to select data from the store.
+     * Must be used inside a Store.Provider component.
+     * @param selector Function to select data from the store state
+     * @returns The selected data from the store
+     * @throws Error if used outside of Store.Provider
+     */
+    function useSelector<T>(selector: (state: StoreState) => T): T {
+      const store = useStore();
+      const memoizedSelector = useMemo(() => selector, [selector]);
+      
+      return useSyncExternalStore(
+        store.subscribe,
+        () => memoizedSelector(store.getSnapshot()),
+        () => memoizedSelector(store.getSnapshot()) // Same for server
+      );
+    }
+
+    return {
+      Provider,
+      Loading,
+      useStore,
+      useSelector,
+    };
   }
 
-  function useDispatch<K extends keyof TStores>(storeKey: K) {
-    const bridge = useBridge();
-    return useCallback(
-      (event: TStores[K]["events"]) => {
-        bridge.dispatch(storeKey, event);
-      },
-      [bridge, storeKey]
-    );
-  }
-
+  /**
+   * Renders children only when the bridge is supported
+   */
   const Supported = memo(({ children }: { children: ReactNode }) => {
     const bridge = useBridge();
     const isSupported = bridge.isSupported();
@@ -80,6 +198,9 @@ export function createBridgeContext<TStores extends BridgeStores>() {
   });
   Supported.displayName = "BridgeSupported";
 
+  /**
+   * Renders children only when the bridge is not supported
+   */
   const Unsupported = memo(({ children }: { children: ReactNode }) => {
     const bridge = useBridge();
     const isSupported = bridge.isSupported();
@@ -87,132 +208,12 @@ export function createBridgeContext<TStores extends BridgeStores>() {
   });
   Unsupported.displayName = "BridgeUnsupported";
 
-  function createStoreContext<K extends keyof TStores>(storeKey: K) {
-    const StoreContext = createContext<TStores[K]["state"] | null>(null);
-    
-    const StoreProvider = memo(({ children }: { children: ReactNode }) => {
-      const bridge = useBridge();
-      
-      const state = useSyncExternalStoreWithSelector(
-        (onStoreChange) => {
-          return bridge.subscribe(storeKey, (newState) => {
-            onStoreChange();
-          });
-        },
-        () => {
-          const snapshot = bridge.getSnapshot()[storeKey];
-          return snapshot;
-        },
-        () => {
-          const snapshot = bridge.getSnapshot()[storeKey];
-          return snapshot;
-        },
-        (state) => state,
-        (a, b) => a === b
-      );
-      
-      return (
-        <StoreContext.Provider value={state}>
-          {children}
-        </StoreContext.Provider>
-      );
-    });
-    StoreProvider.displayName = `StoreProvider<${String(storeKey)}>`;
-
-    function useStore() {
-      const state = useContext(StoreContext);
-      return state;
-    }
-
-    function useSelector<T extends TStores[K]["state"]>(selector: (state: TStores[K]["state"]) => T): T {
-      const bridge = useBridge();
-      return useSyncExternalStoreWithSelector(
-        (onStoreChange) => bridge.subscribe(storeKey, onStoreChange),
-        () => {
-          const snapshot = bridge.getSnapshot()[storeKey];
-          return snapshot !== null ? selector(snapshot) : selector({} as TStores[K]["state"]);
-        },
-        () => {
-          const snapshot = bridge.getSnapshot()[storeKey];
-          return snapshot !== null ? selector(snapshot) : selector({} as TStores[K]["state"]);
-        },
-        selector,
-        (a, b) => a === b
-      );
-    }
-
-    function useDispatch() {
-      const bridge = useBridge();
-      return useCallback(
-        (event: TStores[K]["events"]) => {
-          bridge.dispatch(storeKey, event);
-        },
-        [bridge]
-      );
-    }
-
-    const Initialized = memo(({ children }: { children: ReactNode }) => {
-      const state = useStore();
-      return state !== null ? <>{children}</> : null;
-    });
-    Initialized.displayName = `StoreInitialized<${String(storeKey)}>`;
-
-    const Initializing = memo(({ children }: { children: ReactNode }) => {
-      const state = useStore();
-      return state === null ? <>{children}</> : null;
-    });
-    Initializing.displayName = `StoreInitializing<${String(storeKey)}>`;
-
-    return {
-      Provider: StoreProvider,
-      useStore,
-      useSelector,
-      useDispatch,
-      Initialized,
-      Initializing
-    };
-  }
-
   return {
     Provider,
-    useBridge,
-    useSelector,
-    useDispatch,
+    createStoreContext,
     Supported,
     Unsupported,
-    createStoreContext
   };
 }
 
-function useSyncExternalStoreWithSelector<Snapshot, Selection>(
-  subscribe: (onStoreChange: () => void) => () => void,
-  getSnapshot: () => Snapshot,
-  getServerSnapshot: undefined | null | (() => Snapshot),
-  selector: (snapshot: Snapshot) => Selection,
-  isEqual?: (a: Selection, b: Selection) => boolean
-): Selection {
-  const lastSelection = useMemo(() => ({
-    value: null as Selection | null
-  }), []);
-
-  const getSelection = useCallback(() => {
-    const nextSnapshot = getSnapshot();
-    const nextSelection = selector(nextSnapshot);
-
-    // If we have a previous selection and it's equal to the next selection, return the previous
-    if (lastSelection.value !== null && isEqual?.(lastSelection.value, nextSelection)) {
-      return lastSelection.value;
-    }
-
-    // Otherwise store and return the new selection
-    lastSelection.value = nextSelection;
-    return nextSelection;
-  }, [getSnapshot, selector, isEqual]);
-
-  const result = useSyncExternalStore(
-    subscribe,
-    getSelection,
-    getServerSnapshot ? () => selector(getServerSnapshot()) : undefined
-  );
-  return result;
-} 
+export { createBridgeContext };
