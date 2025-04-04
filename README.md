@@ -45,10 +45,10 @@ export interface CounterState {
   value: number;
 }
 
-export interface CounterEvents {
-  type: "INCREMENT" | "DECREMENT" | "SET";
-  value?: number;
-}
+export type CounterEvents =
+  | { type: "INCREMENT" }
+  | { type: "DECREMENT" }
+  | { type: "SET"; value: number };
 
 export type AppStores = {
   counter: {
@@ -300,16 +300,5 @@ describe('Counter Component', () => {
     );
 
     expect(screen.getByText('Bridge not supported')).toBeInTheDocument();
-  });
-
-  it('throws error when hooks are used outside provider', () => {
-    // Suppress console.error for this test
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    expect(() => {
-      render(<Counter />);
-    }).toThrow('Store "counter" is not available');
-
-    consoleSpy.mockRestore();
   });
 });
