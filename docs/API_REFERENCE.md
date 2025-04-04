@@ -32,6 +32,44 @@ export type Event = {
 };
 ```
 
+### `Store` Interface
+
+Interface for a store that manages state and handles events:
+
+```typescript
+/**
+ * Base interface for a store that manages state and handles events.
+ * Each store is generic over its specific state and event types.
+ */
+export interface Store<TState extends State, TEvent extends Event> {
+  /** Get the current state snapshot */
+  getSnapshot: () => TState;
+  /** Subscribe to state changes */
+  subscribe: (listener: (state: TState) => void) => () => void;
+  /** Dispatch an event to update the state */
+  dispatch: (event: TEvent) => void;
+}
+```
+
+### `MockStore` Interface
+
+Extended store interface for testing purposes:
+
+```typescript
+/**
+ * Interface for a mock store that includes testing utilities.
+ * This is only used in the mock bridge for testing purposes.
+ */
+export interface MockStore<TState extends State, TEvent extends Event> extends Store<TState, TEvent> {
+  /** Directly modify the state using a producer function - only available in mock bridge */
+  produce: (producer: (state: TState) => void) => void;
+  /** Reset the store's state to undefined and notify listeners */
+  reset: () => void;
+  /** Set the store's complete state and notify listeners */
+  setState: (state: TState) => void;
+}
+```
+
 ### `BridgeStores`
 
 Type for defining your application's stores:
@@ -51,25 +89,6 @@ export type AppStores = {
 };
 ```
 
-### `BridgeState`
-
-Type representing the current state of all stores:
-
-```typescript
-/**
- * Represents the current state of all stores in a bridge
- */
-export type BridgeState<TStores extends BridgeStores> = {
-  [K in keyof TStores]: TStores[K]['state'] | null;
-};
-
-// Example
-const state: BridgeState<AppStores> = {
-  counter: { value: 42 },  // Initialized store
-  user: null               // Uninitialized store
-};
-```
-
 ## Bridge Interfaces
 
 ### Base Bridge Interface
@@ -84,28 +103,18 @@ export interface Bridge<TStores extends BridgeStores> {
   isSupported(): boolean;
 
   /**
-   * Get the current snapshot of all stores
-   * Returns a map of store keys to their current state
-   * If a store is not initialized, its value will be null
+   * Get a store by its key.
+   * Returns undefined if the store is not available.
    */
-  getSnapshot(): BridgeState<TStores>;
+  getStore: <K extends keyof TStores>(
+    key: K
+  ) => Store<TStores[K]["state"], TStores[K]["events"]> | undefined;
 
-  /**
-   * Subscribe to changes in a specific store's state
-   * @param storeKey The store to subscribe to
-   * @param callback The callback to be called when the store's state changes
+  /** 
+   * Subscribe to store availability changes.
+   * Called when a store becomes available or unavailable.
    */
-  subscribe: <K extends keyof TStores>(
-    storeKey: K,
-    callback: (state: TStores[K]['state']) => void
-  ) => () => void;
-
-  /**
-   * Dispatch an event to a specific store
-   * @param storeKey The store to dispatch to
-   * @param event The event to dispatch
-   */
-  dispatch: <K extends keyof TStores>(storeKey: K, event: TStores[K]['events']) => void;
+  subscribe: (listener: () => void) => () => void;
 }
 ```
 
@@ -203,6 +212,14 @@ function createWebBridge<TStores extends BridgeStores>(): Bridge<TStores>
 
 // Example
 const bridge = createWebBridge<AppStores>();
+
+// Getting a store from the bridge
+const counterStore = bridge.getStore('counter');
+if (counterStore) {
+  // Access state and methods on the store
+  const currentState = counterStore.getSnapshot();
+  counterStore.dispatch({ type: 'INCREMENT' });
+}
 ```
 
 The web bridge automatically receives its state from the native side through WebView messages.
@@ -224,6 +241,19 @@ const bridge = createNativeBridge<AppStores>({
     counter: { value: 0 }
   }
 });
+
+// Getting a store from the bridge
+const counterStore = bridge.getStore('counter');
+if (counterStore) {
+  // Access state using getSnapshot() on the store
+  const currentState = counterStore.getSnapshot();
+  console.log('Current counter value:', currentState.value);
+  
+  // Update state using the store's methods
+  counterStore.produce(draft => {
+    draft.value += 1;
+  });
+}
 ```
 
 ### `createMockBridge<TStores>`
@@ -255,6 +285,21 @@ const bridge = createMockBridge<AppStores>({
     user: { name: "John", age: 30 }
   }
 });
+
+// Get a mock store which has additional testing methods
+const counterStore = bridge.getStore('counter');
+if (counterStore) {
+  // Access current state
+  const currentState = counterStore.getSnapshot();
+  
+  // Modify state directly with produce
+  counterStore.produce(state => {
+    state.value += 1;
+  });
+  
+  // Check that state was updated
+  expect(counterStore.getSnapshot().value).toBe(1);
+}
 ```
 
 ## WebView Integration
@@ -365,7 +410,13 @@ const BridgeContext = createBridgeContext<AppStores>();
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
-      {/* App content */}
+      <CounterContext.Provider>
+        <p>Bridge is supported in this environment!</p>
+        <GameComponent />
+      </CounterContext.Provider>
+      <CounterContext.Loading>
+        <p>Loading...</p>
+      </CounterContext.Loading>
     </BridgeContext.Provider>
   );
 }
@@ -379,13 +430,13 @@ Conditional render components that only render their children when the bridge is
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
-      <BridgeContext.Supported>
+      <CounterContext.Provider>
         <p>Bridge is supported in this environment!</p>
         <GameComponent />
-      </BridgeContext.Supported>
-      <BridgeContext.Unsupported>
-        <p>Bridge is not supported here. Please use the native app.</p>
-      </BridgeContext.Unsupported>
+      </CounterContext.Provider>
+      <CounterContext.Loading>
+        <p>Loading...</p>
+      </CounterContext.Loading>
     </BridgeContext.Provider>
   );
 }
@@ -422,9 +473,12 @@ function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
       <CounterContext.Provider>
-        {/* Only rendered when counter store is initialized */}
-        <CounterComponent />
+        <p>Bridge is supported in this environment!</p>
+        <GameComponent />
       </CounterContext.Provider>
+      <CounterContext.Loading>
+        <p>Loading...</p>
+      </CounterContext.Loading>
     </BridgeContext.Provider>
   );
 }
@@ -439,10 +493,11 @@ function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
       <CounterContext.Provider>
-        <CounterDisplay />
+        <p>Bridge is supported in this environment!</p>
+        <GameComponent />
       </CounterContext.Provider>
       <CounterContext.Loading>
-        <LoadingSpinner />
+        <p>Loading...</p>
       </CounterContext.Loading>
     </BridgeContext.Provider>
   );
@@ -458,13 +513,11 @@ Hook to get the store instance for a specific store. Must be used within a `Stor
 ```typescript
 function Counter() {
   const store = CounterContext.useStore();
-  
-  // Now you can directly interact with the store
-  const state = store.getSnapshot();
+  const count = CounterContext.useSelector(state => state.value);
   
   return (
     <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>
-      Count: {state.value}
+      Count: {count}
     </button>
   );
 }
@@ -478,9 +531,8 @@ Hook to select and subscribe to a specific piece of data from the store:
 
 ```typescript
 function Counter() {
-  // Will throw if not used inside CounterContext.Provider
-  const count = CounterContext.useSelector(state => state.value);
   const store = CounterContext.useStore();
+  const count = CounterContext.useSelector(state => state.value);
   
   return (
     <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>
@@ -494,7 +546,7 @@ function Counter() {
 
 ```tsx
 // shared/types.ts
-import { BridgeStoreDefinitions, State } from '@open-game-system/app-bridge';
+import { BridgeStoreDefinitions, State, Event } from '@open-game-system/app-bridge';
 
 export interface CounterState extends State {
   value: number;
@@ -523,16 +575,36 @@ const bridge = createWebBridge<AppStores>();
 const BridgeContext = createBridgeContext<AppStores>();
 const CounterContext = BridgeContext.createStoreContext('counter');
 
+// Example component that uses the counter store
 function Counter() {
-  // Only available inside CounterContext.Provider
-  const count = CounterContext.useSelector(state => state.value);
+  // Get access to the counter store
   const store = CounterContext.useStore();
+  
+  // Use a selector to get just the value from the state
+  const count = CounterContext.useSelector(state => state.value);
+  
+  // Alternative approach with direct store usage
+  const handleReset = () => {
+    // Get the current value directly from the store
+    const currentState = store.getSnapshot();
+    console.log(`Resetting counter from ${currentState.value} to 0`);
+    
+    // Dispatch an event to set it to 0
+    store.dispatch({ type: 'SET', value: 0 });
+  };
   
   return (
     <div>
-      <h1>Counter: {count}</h1>
-      <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>+</button>
-      <button onClick={() => store.dispatch({ type: 'DECREMENT' })}>-</button>
+      <p>Count: {count}</p>
+      <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>
+        Increment
+      </button>
+      <button onClick={() => store.dispatch({ type: 'DECREMENT' })}>
+        Decrement
+      </button>
+      <button onClick={handleReset}>
+        Reset
+      </button>
     </div>
   );
 }
@@ -541,7 +613,6 @@ function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
       <BridgeContext.Supported>
-        {/* Counter store integration */}
         <CounterContext.Provider>
           <Counter />
         </CounterContext.Provider>

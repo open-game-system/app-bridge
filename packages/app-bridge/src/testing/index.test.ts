@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BridgeStoreDefinitions, State } from "../types";
-import { createMockBridge } from "./index";
+import { createMockBridge, MockStore } from "./index";
 
 interface CounterState extends State {
   value: number;
 }
 
-type CounterEvent =
+type CounterEvents =
   | { type: "INCREMENT" }
   | { type: "DECREMENT" }
   | { type: "SET"; value: number };
@@ -16,18 +16,19 @@ interface UserState extends State {
   age: number;
 }
 
-type UserEvent =
+type UserEvents =
   | { type: "SET_NAME"; name: string }
-  | { type: "SET_AGE"; age: number };
+  | { type: "SET_AGE"; age: number }
+  | { type: "SET"; value: UserState };
 
 interface TestStores extends BridgeStoreDefinitions {
   counter: {
     state: CounterState;
-    events: CounterEvent;
+    events: CounterEvents;
   };
   user: {
     state: UserState;
-    events: UserEvent;
+    events: UserEvents;
   };
 }
 

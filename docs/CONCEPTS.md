@@ -207,50 +207,29 @@ function Counter() {
 function App() {
   return (
     <BridgeContext.Supported>
-      <CounterContext.Initializing>
+      <CounterContext.Loading>
         <div>Loading...</div>
-      </CounterContext.Initializing>
-      <CounterContext.Initialized>
+      </CounterContext.Loading>
+      <CounterContext.Provider>
         <Counter />
-      </CounterContext.Initialized>
+      </CounterContext.Provider>
     </BridgeContext.Supported>
   );
 }
 ```
 
-## Testing
+## Component Testing
 
-Testing with the bridge requires:
-
-1. Mock bridge setup
-2. State verification
-3. Event simulation
-4. Component testing
+The following example demonstrates how to test a component using the BridgeContext.Provider:
 
 ```typescript
-// Create mock bridge
-const mockBridge = createMockBridge<AppStores>({
-  initialState: {
-    counter: { value: 0 }
-  }
-});
-
-// Get store and verify state
-const counterStore = mockBridge.getStore("counter");
-if (!counterStore) throw new Error("Store not available");
-expect(counterStore.getSnapshot()).toEqual({ value: 0 });
-
-// Dispatch and verify events
-counterStore.dispatch({ type: "INCREMENT" });
-expect(mockBridge.getHistory("counter")).toEqual([{ type: "INCREMENT" }]);
-
 // Test component
 test('Counter updates correctly', () => {
   render(
     <BridgeContext.Provider bridge={mockBridge}>
-      <CounterContext.Initialized>
+      <CounterContext.Provider>
         <CounterComponent />
-      </CounterContext.Initialized>
+      </CounterContext.Provider>
     </BridgeContext.Provider>
   );
 
@@ -258,28 +237,3 @@ test('Counter updates correctly', () => {
   expect(mockBridge.getHistory("counter")).toContainEqual({ type: "INCREMENT" });
 });
 ```
-
-## Best Practices
-
-1. **Type Safety**
-   - Use shared types between web and native
-   - Leverage TypeScript's type system
-   - Keep types in a shared location
-
-2. **State Management**
-   - Initialize stores when ready
-   - Handle uninitialized states
-   - Use immer-style updates
-   - Keep reducers pure
-
-3. **React Integration**
-   - Use context providers
-   - Handle initialization states
-   - Use selectors for performance
-   - Keep components focused
-
-4. **Testing**
-   - Use mock bridge
-   - Test initialization states
-   - Test error cases
-   - Keep tests focused

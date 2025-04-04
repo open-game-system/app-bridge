@@ -1,6 +1,6 @@
-import type { Bridge, BridgeStores } from '../types';
+import type { NativeBridge, BridgeStores, Store, NativeStore, WebToNativeMessage, NativeToWebMessage } from '../types';
 import { produce } from 'immer';
-import { compare, applyPatch } from 'fast-json-patch';
+import { compare, applyPatch, Operation } from 'fast-json-patch';
 
 export interface WebView {
   injectJavaScript: (script: string) => void;
@@ -11,35 +11,9 @@ interface NativeBridgeConfig<TStores extends BridgeStores> {
   initialState?: { [K in keyof TStores]?: TStores[K]['state'] };
 }
 
-// Messages from web to native
-interface WebToNativeMessage {
-  type: "EVENT";
-  storeKey: string;
-  event: any;
-}
-
-// Messages from native to web
-type NativeToWebMessage =
-  | {
-      type: "STATE_INIT";
-      storeKey: string;
-      data: any;
-    }
-  | {
-      type: "STATE_UPDATE";
-      storeKey: string;
-      operations: any[];
-    };
-
 export function createNativeBridge<TStores extends BridgeStores>(
   config: NativeBridgeConfig<TStores> = {}
-): Bridge<TStores> & {
-  registerWebView: (webView: WebView) => void;
-  unregisterWebView: (webView: WebView) => void;
-  produce: <K extends keyof TStores>(storeKey: K, producer: (draft: TStores[K]['state']) => void) => void;
-  setState: <K extends keyof TStores>(key: K, newState: TStores[K]['state'] | undefined) => void;
-  reset: (storeKey?: keyof TStores) => void;
-} {
+): NativeBridge<TStores> {
   // Create a deep copy of the initial state to avoid reference issues
   const initialState = config.initialState ? JSON.parse(JSON.stringify(config.initialState)) : {} as any;
   let state: { [K in keyof TStores]?: TStores[K]['state'] } = JSON.parse(JSON.stringify(initialState));
@@ -66,16 +40,65 @@ export function createNativeBridge<TStores extends BridgeStores>(
   return {
     isSupported: () => true,
 
-    getSnapshot: () => state,
-
-    subscribe: <K extends keyof TStores>(storeKey: K, callback: (state: TStores[K]['state']) => void) => {
-      if (!listeners.has(storeKey)) {
-        listeners.set(storeKey, new Set());
+    subscribe: (listener: () => void) => {
+      // Create a Set to store global listeners if it doesn't exist
+      if (!listeners.has('__global__' as keyof TStores)) {
+        listeners.set('__global__' as keyof TStores, new Set());
       }
-      const storeListeners = listeners.get(storeKey)!;
-      storeListeners.add(callback);
+      const globalListeners = listeners.get('__global__' as keyof TStores)!;
+      globalListeners.add(listener as any);
       return () => {
-        storeListeners.delete(callback);
+        globalListeners.delete(listener as any);
+      };
+    },
+
+    // Keep the store-specific subscribe as an internal method
+    // but expose it through getStore
+    getStore: <K extends keyof TStores>(
+      storeKey: K
+    ): NativeStore<TStores[K]['state'], TStores[K]['events']> | undefined => {
+      if (state[storeKey] === undefined) return undefined;
+      
+      return {
+        getSnapshot: () => state[storeKey] as TStores[K]['state'],
+        subscribe: (callback: (state: TStores[K]['state']) => void) => {
+          if (!listeners.has(storeKey)) {
+            listeners.set(storeKey, new Set());
+          }
+          const storeListeners = listeners.get(storeKey)!;
+          storeListeners.add(callback);
+          return () => {
+            storeListeners.delete(callback);
+          };
+        },
+        produce: (producer: (draft: TStores[K]['state']) => void) => {
+          // Delegate to the bridge's produce method
+          if (state[storeKey] === undefined) return;
+          const currentState = state[storeKey] as TStores[K]['state'];
+          const newState = produce(currentState, producer) as TStores[K]['state'];
+          
+          // Calculate patch operations
+          const operations = compare(currentState, newState);
+          
+          if (operations.length > 0) {
+            state[storeKey] = newState;
+            
+            // Send patch operations to web views
+            broadcastToWebViews({
+              type: 'STATE_UPDATE',
+              storeKey: storeKey as string,
+              operations,
+            });
+          }
+          
+          notifyListeners(storeKey);
+        },
+        dispatch: (event: TStores[K]['events']) => {
+          // This is mainly for internal use but we expose it for consistency
+          // Actual implementation is up to the native app
+          console.log(`Store ${String(storeKey)} received event:`, event);
+          // Native apps should use produce rather than dispatch
+        }
       };
     },
 
@@ -85,12 +108,12 @@ export function createNativeBridge<TStores extends BridgeStores>(
     },
 
     produce: <K extends keyof TStores>(storeKey: K, producer: (draft: TStores[K]['state']) => void) => {
-      const snapshot = state[storeKey];
-      if (snapshot === undefined) return;
-      const newState = produce(snapshot, producer) as TStores[K]['state'];
+      const currentState = state[storeKey];
+      if (currentState === undefined) return;
+      const newState = produce(currentState, producer) as TStores[K]['state'];
       
       // Calculate patch operations
-      const operations = compare(snapshot, newState);
+      const operations = compare(currentState, newState);
       
       if (operations.length > 0) {
         state[storeKey] = newState;

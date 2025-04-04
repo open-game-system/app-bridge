@@ -172,3 +172,5 @@ The testing architecture provides:
 3. Event tracking for verifying dispatched events
 4. State reset capabilities for test isolation
 5. Support for testing initialization and error scenarios 
+
+// Add example if any component name issues are found 

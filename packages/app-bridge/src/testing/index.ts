@@ -1,13 +1,24 @@
 // Testing utilities will go here
-import type { Bridge, BridgeStoreDefinitions, MockStore } from "../types";
+import { BridgeStoreDefinitions, State, Event, Store, NativeStore, Bridge } from "../types";
+
+/**
+ * Interface for a mock store that includes testing utilities.
+ * This is only used in the mock bridge for testing purposes.
+ */
+export interface MockStore<TState extends State, TEvent extends Event> extends Store<TState, TEvent> {
+  /** Directly modify the state using a producer function - only available in mock bridge */
+  produce: (producer: (state: TState) => void) => void;
+  /** Reset the store's state to undefined and notify listeners */
+  reset: () => void;
+  /** Set the store's complete state and notify listeners */
+  setState: (state: TState) => void;
+}
 
 /**
  * Configuration options for creating a mock bridge
  * @template TStores Store definitions for the bridge
  */
-export interface MockBridgeConfig<
-  TStores extends Record<string, { state: any; events: any }>
-> {
+export interface MockBridgeConfig<TStores extends BridgeStoreDefinitions = BridgeStoreDefinitions> {
   /**
    * Whether the bridge is supported in the current environment
    */
@@ -17,7 +28,9 @@ export interface MockBridgeConfig<
    * Initial state for stores in the bridge
    * When provided, stores will be pre-initialized with these values
    */
-  initialState?: Record<keyof TStores, TStores[keyof TStores]["state"]>;
+  initialState?: Partial<{
+    [K in keyof TStores]: TStores[K]["state"];
+  }>;
 }
 
 /**
@@ -25,7 +38,7 @@ export interface MockBridgeConfig<
  * @template TStores Store definitions for the bridge
  */
 export interface MockBridge<TStores extends BridgeStoreDefinitions>
-  extends Bridge<TStores> {
+  extends Omit<Bridge<TStores>, 'getSnapshot'> {
   /**
    * Get a store by its key.
    * Always returns a store (creating one if it doesn't exist)
@@ -54,6 +67,11 @@ export interface MockBridge<TStores extends BridgeStoreDefinitions>
     storeKey: K,
     state: TStores[K]["state"]
   ) => void;
+  
+  /**
+   * Check if the bridge is supported
+   */
+  isSupported: () => boolean;
 }
 
 /**
@@ -271,7 +289,7 @@ export function createMockBridge<TStores extends BridgeStoreDefinitions>(
      * Subscribe to store availability changes
      * Returns an unsubscribe function
      */
-    subscribe: (listener) => {
+    subscribe: (listener: () => void) => {
       storeListeners.add(listener);
       return () => {
         storeListeners.delete(listener);

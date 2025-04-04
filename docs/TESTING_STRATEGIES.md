@@ -19,8 +19,8 @@ Test individual functions and utilities:
 describe('Bridge', () => {
   test('initializes with correct state', () => {
     // Web Bridge
-    const webBridge = createBridge<AppStores>();
-    expect(webBridge.getSnapshot().counter).toBeNull();
+    const webBridge = createWebBridge<AppStores>();
+    expect(webBridge.getStore('counter')).toBeUndefined();
 
     // Native Bridge
     const nativeBridge = createNativeBridge<AppStores>({
@@ -28,7 +28,8 @@ describe('Bridge', () => {
         counter: { value: 0 }
       }
     });
-    expect(nativeBridge.getSnapshot().counter).toEqual({ value: 0 });
+    const counterStore = nativeBridge.getStore('counter');
+    expect(counterStore?.getSnapshot()).toEqual({ value: 0 });
   });
 
   test('handles store initialization states', () => {
@@ -149,9 +150,9 @@ describe('Store Lifecycle', () => {
     // Component test using mock bridge
     render(
       <BridgeContext.Provider bridge={mockBridge}>
-        <CounterContext.Initialized>
+        <CounterContext.Provider>
           <CounterComponent />
-        </CounterContext.Initialized>
+        </CounterContext.Provider>
       </BridgeContext.Provider>
     );
 
@@ -204,19 +205,21 @@ describe('Component Integration', () => {
     function TestComponent() {
       // Using store-specific context
       const counterValue = CounterContext.useSelector(state => state.value);
-      const dispatch = CounterContext.useDispatch();
+      const store = CounterContext.useStore();
 
       return (
         <div>
           <p>Count: {counterValue}</p>
-          <button onClick={() => dispatch({ type: 'INCREMENT' })}>+</button>
+          <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>+</button>
         </div>
       );
     }
 
     render(
       <BridgeContext.Provider bridge={bridge}>
-        <TestComponent />
+        <CounterContext.Provider>
+          <TestComponent />
+        </CounterContext.Provider>
       </BridgeContext.Provider>
     );
 
@@ -273,6 +276,19 @@ const mockBridge = createMockBridge<AppStores>({
     user: { name: 'Test', age: 30 }
   }
 });
+```
+
+### Using the getSnapshot Method
+
+To access the current state of a store, always retrieve the store first and then use the `getSnapshot()` method on the store:
+
+```typescript
+// Correct pattern: get the store, then use store.getSnapshot()
+const counterStore = bridge.getStore('counter');
+if (counterStore) {
+  const state = counterStore.getSnapshot();
+  console.log('Counter value:', state.value);
+}
 ```
 
 ### Advanced Configuration
@@ -394,9 +410,9 @@ test('Component shows loading state while store initializes', () => {
 
   render(
     <BridgeContext.Provider bridge={mockBridge}>
-      <CounterContext.Initializing>
+      <CounterContext.Loading>
         <LoadingComponent />
-      </CounterContext.Initializing>
+      </CounterContext.Loading>
     </BridgeContext.Provider>
   );
 

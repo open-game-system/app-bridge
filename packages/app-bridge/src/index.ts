@@ -2,7 +2,11 @@
 export * from './types';
 export * from './web';
 export * from './react';
-export * from './testing';
+export {
+  MockBridge,
+  MockBridgeConfig,
+  createMockBridge
+} from './testing';
 
 // Re-export submodules for backward compatibility
 import * as web from './web';

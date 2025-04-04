@@ -1,25 +1,5 @@
 import { applyPatch, Operation } from "fast-json-patch";
-import { Bridge, BridgeStoreDefinitions, Store, State, Event } from "../types";
-
-// Messages from native to web
-type NativeToWebMessage =
-  | {
-      type: "STATE_INIT";
-      storeKey: string;
-      data: State;
-    }
-  | {
-      type: "STATE_UPDATE";
-      storeKey: string;
-      operations: Operation[];
-    };
-
-// Messages from web to native
-interface WebToNativeMessage {
-  type: "EVENT";
-  storeKey: string;
-  event: Event;
-}
+import { Bridge, BridgeStoreDefinitions, Store, State, Event, WebToNativeMessage, NativeToWebMessage } from "../types";
 
 export interface WebViewBridge {
   postMessage: (message: string) => void;
