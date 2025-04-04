@@ -1,11 +1,12 @@
 // Testing utilities will go here
-import { BridgeStoreDefinitions, State, Event, Store, NativeStore, Bridge } from "../types";
+import { Bridge, BridgeStoreDefinitions, Event, State, Store } from "../types";
 
 /**
  * Interface for a mock store that includes testing utilities.
  * This is only used in the mock bridge for testing purposes.
  */
-export interface MockStore<TState extends State, TEvent extends Event> extends Store<TState, TEvent> {
+export interface MockStore<TState extends State, TEvent extends Event>
+  extends Store<TState, TEvent> {
   /** Directly modify the state using a producer function - only available in mock bridge */
   produce: (producer: (state: TState) => void) => void;
   /** Reset the store's state to undefined and notify listeners */
@@ -18,7 +19,9 @@ export interface MockStore<TState extends State, TEvent extends Event> extends S
  * Configuration options for creating a mock bridge
  * @template TStores Store definitions for the bridge
  */
-export interface MockBridgeConfig<TStores extends BridgeStoreDefinitions = BridgeStoreDefinitions> {
+export interface MockBridgeConfig<
+  TStores extends BridgeStoreDefinitions = BridgeStoreDefinitions
+> {
   /**
    * Whether the bridge is supported in the current environment
    */
@@ -38,7 +41,7 @@ export interface MockBridgeConfig<TStores extends BridgeStoreDefinitions = Bridg
  * @template TStores Store definitions for the bridge
  */
 export interface MockBridge<TStores extends BridgeStoreDefinitions>
-  extends Omit<Bridge<TStores>, 'getSnapshot'> {
+  extends Omit<Bridge<TStores>, "getSnapshot"> {
   /**
    * Get a store by its key.
    * Always returns a store (creating one if it doesn't exist)
@@ -67,7 +70,7 @@ export interface MockBridge<TStores extends BridgeStoreDefinitions>
     storeKey: K,
     state: TStores[K]["state"]
   ) => void;
-  
+
   /**
    * Check if the bridge is supported
    */
@@ -262,7 +265,7 @@ export function createMockBridge<TStores extends BridgeStoreDefinitions>(
         }
       } else {
         // Reset all stores
-        for (const [key, store] of stores.entries()) {
+        for (const [_, store] of stores.entries()) {
           store.reset();
         }
       }

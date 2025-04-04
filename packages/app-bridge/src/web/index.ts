@@ -1,5 +1,11 @@
-import { applyPatch, Operation } from "fast-json-patch";
-import { Bridge, BridgeStoreDefinitions, Store, State, Event, WebToNativeMessage, NativeToWebMessage } from "../types";
+import { applyPatch } from "fast-json-patch";
+import {
+  Bridge,
+  BridgeStoreDefinitions,
+  Store,
+  WebToNativeMessage,
+  NativeToWebMessage,
+} from "../types";
 
 export interface WebViewBridge {
   postMessage: (message: string) => void;
@@ -18,10 +24,15 @@ declare global {
  * @template TStores Store definitions for the bridge
  * @returns A Bridge instance
  */
-export function createWebBridge<TStores extends BridgeStoreDefinitions>(): Bridge<TStores> {
+export function createWebBridge<
+  TStores extends BridgeStoreDefinitions
+>(): Bridge<TStores> {
   // Internal state storage
-  const stateByStore = new Map<keyof TStores, TStores[keyof TStores]["state"]>();
-  
+  const stateByStore = new Map<
+    keyof TStores,
+    TStores[keyof TStores]["state"]
+  >();
+
   // Store instances by key
   const stores = new Map<
     keyof TStores,
@@ -67,13 +78,15 @@ export function createWebBridge<TStores extends BridgeStoreDefinitions>(): Bridg
           notifyStoreListeners();
         } else if (message.type === "STATE_UPDATE") {
           // Apply patch operations
-          const currentState = stateByStore.get(message.storeKey as keyof TStores);
+          const currentState = stateByStore.get(
+            message.storeKey as keyof TStores
+          );
           if (currentState) {
-            const result = applyPatch(
-              currentState,
-              message.operations
+            const result = applyPatch(currentState, message.operations);
+            stateByStore.set(
+              message.storeKey as keyof TStores,
+              result.newDocument
             );
-            stateByStore.set(message.storeKey as keyof TStores, result.newDocument);
             notifyStateListeners(message.storeKey as keyof TStores);
           }
         }
@@ -102,11 +115,10 @@ export function createWebBridge<TStores extends BridgeStoreDefinitions>(): Bridg
       if (!stateByStore.has(storeKey)) return undefined;
 
       // Return existing store instance if we have one
-      let store = stores.get(storeKey) as Store<
-        TStores[K]["state"],
-        TStores[K]["events"]
-      > | undefined;
-      
+      let store = stores.get(storeKey) as
+        | Store<TStores[K]["state"], TStores[K]["events"]>
+        | undefined;
+
       // Create a new store if needed
       if (!store) {
         store = {
@@ -157,7 +169,7 @@ export function createWebBridge<TStores extends BridgeStoreDefinitions>(): Bridg
         };
         stores.set(storeKey, store);
       }
-      
+
       return store;
     },
 

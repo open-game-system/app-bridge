@@ -5,7 +5,7 @@ import { act } from "react-dom/test-utils";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Counter } from "./Counter";
 import type { AppStores } from "./types";
-import { BridgeContext, CounterContext } from "./bridge";
+import { BridgeContext } from "./bridge";
 
 describe("Counter", () => {
   let mockBridge: MockBridge<AppStores>;

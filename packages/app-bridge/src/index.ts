@@ -3,9 +3,11 @@ export * from './types';
 export * from './web';
 export * from './react';
 export {
+  createMockBridge
+} from './testing';
+export type {
   MockBridge,
   MockBridgeConfig,
-  createMockBridge
 } from './testing';
 
 // Re-export submodules for backward compatibility
