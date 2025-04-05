@@ -96,62 +96,13 @@ jobs:
         # Get PR number
         PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
-        # Get GitHub run number for incrementing builds of the same PR
-        RUN_NUMBER=${{ github.run_number }}
+        # Get current run number for a unique build number
+        BUILD_NUMBER=${{ github.run_number }}
         
-        # Check if there are any existing versions with this PR prefix
-        echo "Checking for existing versions with PR${PR_NUMBER}..."
-        
-        # Get the latest published version with npm view from GitHub Packages
-        # Use registry option to point to GitHub Packages
-        REGISTRY_URL="https://npm.pkg.github.com/${GITHUB_REPOSITORY_OWNER}"
-        LATEST_PUBLISHED=$(npm view --registry=${REGISTRY_URL} ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
-        
-        # Find the highest PR build number for this PR
-        HIGHEST_BUILD=0
-        
-        # Only try to parse if the response isn't an error and isn't empty
-        if [[ "$LATEST_PUBLISHED" != "[]" && "$LATEST_PUBLISHED" != "" && "$LATEST_PUBLISHED" != *"error"* ]]; then
-          # Parse versions and find the highest build for this PR
-          PATTERN="${MAJOR_VERSION}.${DATE}.pr${PR_NUMBER}-"
-          HIGHEST_BUILD=$(echo $LATEST_PUBLISHED | \
-            node -e "
-              try {
-                const data = require('fs').readFileSync(0, 'utf-8');
-                let versions = [];
-                try {
-                  versions = JSON.parse(data);
-                } catch (e) {
-                  console.error('Failed to parse JSON:', e);
-                  process.exit(0); // Exit gracefully with 0 build version
-                }
-                
-                const pattern = process.argv[1];
-                const prVersions = Array.isArray(versions) ? 
-                  versions.filter(v => v.startsWith(pattern)) : 
-                  Object.keys(versions).filter(v => v.startsWith(pattern));
-                
-                if (prVersions.length > 0) {
-                  const builds = prVersions.map(v => parseInt(v.substring(pattern.length), 10))
-                                          .filter(n => !isNaN(n));
-                  console.log(Math.max(...builds, 0));
-                } else {
-                  console.log(0);
-                }
-              } catch (e) {
-                console.error('Error in script:', e);
-                console.log(0); // Default to 0 if any error occurs
-              }
-            " "$PATTERN" || echo "0")
-        fi
-        
-        echo "Highest build found for PR${PR_NUMBER}: ${HIGHEST_BUILD}"
-        
-        # Increment the build number
-        BUILD_NUMBER=$((HIGHEST_BUILD + 1))
-        
-        # Create a version format with PR and build number: MAJOR.YYYYMMDD.prXX-N
-        DEV_VERSION="${MAJOR_VERSION}.${DATE}.pr${PR_NUMBER}-${BUILD_NUMBER}"
+        # Create a version with format: MAJOR.0.0-YYYYMMDD.prN.BUILD
+        # - Using 0.0 for minor and patch to ensure semver compliance
+        # - Using prerelease format with date, PR number and build number
+        DEV_VERSION="${MAJOR_VERSION}.0.0-${DATE}.pr${PR_NUMBER}.${BUILD_NUMBER}"
         
         echo "Generated dev version: $DEV_VERSION"
         echo "DEV_VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
