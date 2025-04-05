@@ -87,21 +87,17 @@ jobs:
         # Package name from package.json
         PACKAGE_NAME=$(node -p "require('./packages/app-bridge/package.json').name")
         
-        # Extract current version from package.json
-        CURRENT_VERSION=$(node -p "require('./packages/app-bridge/package.json').version")
-        
-        # Generate date in format YYYYMMDD
-        DATE=$(date +'%Y%m%d')
+        # Extract major version (e.g., "0" or "4")
+        MAJOR_VERSION=$(node -p "require('./packages/app-bridge/package.json').version.split('.')[0]")
         
         # Get PR number
         PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
-        # Generate a unique dev identifier using the PR number and short commit hash
-        SHORT_SHA=$(git rev-parse --short HEAD)
-        DEV_ID="pr${PR_NUMBER}.${SHORT_SHA}"
+        # Generate a short unique identifier
+        SHORT_SHA=$(git rev-parse --short=7 HEAD)
         
-        # Create a dev version with format: X.Y.Z-dev.YYYYMMDD.prN.HASH
-        DEV_VERSION="${CURRENT_VERSION}-dev.${DATE}.${DEV_ID}"
+        # Create a simpler dev version format: MAJOR-prXX-SHA
+        DEV_VERSION="${MAJOR_VERSION}-pr${PR_NUMBER}-${SHORT_SHA}"
         
         echo "Generated dev version: $DEV_VERSION"
         echo "DEV_VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
