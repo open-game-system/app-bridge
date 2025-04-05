@@ -75,7 +75,8 @@ function GameWebView() {
         // Handle messages from the web side
         bridge.handleWebMessage(event.nativeEvent.data);
       }}
-      injectedJavaScript={bridge.getInjectedJavaScript()}
+      // You might still need injectedJavaScript for other purposes
+      // injectedJavaScript={bridge.getInjectedJavaScript()}
     />
   );
 }

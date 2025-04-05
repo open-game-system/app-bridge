@@ -8,7 +8,6 @@ function App() {
     // Check if window.ReactNativeWebView exists
     const checkBridge = () => {
       const detected = typeof window !== 'undefined' && !!window.ReactNativeWebView;
-      console.log("Bridge detection check:", detected);
       setIsBridgeDetected(detected);
     };
     
@@ -17,8 +16,6 @@ function App() {
     
     // Handle message events - they might indicate we're in a WebView
     const handleMessage = (event: MessageEvent) => {
-      console.log("Message received:", event.data);
-      
       // Check bridge again after receiving a message - might have been initialized
       checkBridge();
     };

@@ -1,427 +1,323 @@
-# 🧪 Testing Strategies
+# Testing Strategies for App Bridge
 
-## Overview
+This document outlines strategies for testing applications that use the app-bridge, with a focus on the core functionality.
 
-This document outlines testing strategies for the app-bridge package, focusing on:
+## Table of Contents
 
-1. Unit testing
-2. Integration testing
-3. Component testing
-4. Mock bridge usage
+- [Testing the Native Side](#testing-the-native-side)
+- [Testing the Web Side](#testing-the-web-side)
+- [Testing User-Visible Functionality](#testing-user-visible-functionality)
+- [Testing WebView Store Integration](#testing-webview-store-integration)
+- [Using the Mock Bridge](#using-the-mock-bridge)
 
-## Testing Approaches
+## Testing the Native Side
 
-### Unit Testing
+When testing components that use the native bridge, you'll typically want to:
 
-Test individual functions and utilities:
+1. Mock the bridge to provide predetermined responses
+2. Verify that components respond appropriately to state changes
+3. Verify that events are dispatched as expected
+
+### Basic Bridge Mocking
 
 ```typescript
-describe('Bridge', () => {
-  test('initializes with correct state', () => {
-    // Web Bridge
-    const webBridge = createWebBridge<AppStores>();
-    expect(webBridge.getStore('counter')).toBeUndefined();
+import { createNativeBridge } from '@open-game-system/app-bridge/native';
 
-    // Native Bridge
-    const nativeBridge = createNativeBridge<AppStores>({
-      initialState: {
-        counter: { value: 0 }
-      }
-    });
-    const counterStore = nativeBridge.getStore('counter');
-    expect(counterStore?.getSnapshot()).toEqual({ value: 0 });
-  });
-
-  test('handles store initialization states', () => {
-    const bridge = createMockBridge<AppStores>({
-      initialState: {
-        counter: { value: 0 }
-      }
-    });
-
-    // Test uninitialization
-    const counterStore = bridge.getStore("counter");
-    if (!counterStore) throw new Error("Store not available");
-    
-    // Make some changes and verify they're tracked
-    counterStore.produce(state => {
-      state.value = 10;
-    });
-    expect(counterStore.getSnapshot()).toEqual({ value: 10 });
-    
-    // Reset to initial state
-    bridge.reset('counter');
-    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
-    expect(bridge.getHistory('counter')).toHaveLength(0);
-  });
-
-  test('handles events correctly', () => {
-    const bridge = createMockBridge<AppStores>({
-      initialState: {
-        counter: { value: 0 }
-      }
-    });
-
-    const counterStore = bridge.getStore("counter");
-    if (!counterStore) throw new Error("Store not available");
-
-    // Dispatch events and check history
-    counterStore.dispatch({ type: "INCREMENT" });
-    expect(bridge.getHistory("counter")).toEqual([{ type: "INCREMENT" }]);
-  });
-});
+// Mock createNativeBridge to return a controlled instance
+jest.mock('@open-game-system/app-bridge/native', () => ({
+  createNativeBridge: jest.fn(() => ({
+    getStore: jest.fn(() => ({
+      getSnapshot: jest.fn(() => ({ value: 0 })),
+      subscribe: jest.fn((callback) => {
+        callback({ value: 0 });
+        return jest.fn(); // unsubscribe function
+      })
+    })),
+    registerWebView: jest.fn(() => jest.fn()), // Return unregister function
+    produce: jest.fn(),
+    setState: jest.fn()
+  }))
+}));
 ```
 
-### Integration Testing
+## Testing the Web Side
 
-Test bridge interactions:
+When testing components that use the web bridge, you'll typically:
 
-```typescript
-describe('Bridge Integration', () => {
-  test('syncs state between stores', () => {
-    const bridge = createMockBridge<AppStores>({
-      initialState: {
-        counter: { value: 0 },
-        user: { name: "Test" }
-      }
-    });
+1. Use the `createMockBridge` utility
+2. Provide test data via the mock bridge
+3. Verify component behavior with the test data
 
-    const counterStore = bridge.getStore("counter");
-    const userStore = bridge.getStore("user");
-    if (!counterStore || !userStore) throw new Error("Stores not available");
-
-    // Make changes to stores
-    counterStore.produce(state => {
-      state.value = 1;
-    });
-    
-    userStore.produce(state => {
-      state.name = "New Name";
-    });
-
-    // Check that each store was updated independently
-    expect(counterStore.getSnapshot()).toEqual({ value: 1 });
-    expect(userStore.getSnapshot()).toEqual({ name: "New Name" });
-  });
-});
-```
-
-### Testing Store Lifecycle
+### Using createMockBridge
 
 ```typescript
-describe('Store Lifecycle', () => {
-  let mockBridge: MockBridge<AppStores>;
+import { render } from '@testing-library/react';
+import { createMockBridge, createBridgeContext } from '@open-game-system/app-bridge';
+import type { AppStores } from './types';
 
-  beforeEach(() => {
-    // Create mock bridge with initial state
-    mockBridge = createMockBridge<AppStores>({
-      initialState: {
-        counter: { value: 0 },
-        user: { name: 'Test' }
-      }
-    });
-  });
-
-  test('handles initialization states correctly', () => {
-    // Test initial state
-    const counterStore = mockBridge.getStore('counter');
-    const userStore = mockBridge.getStore('user');
-    
-    expect(counterStore).toBeDefined();
-    expect(userStore).toBeDefined();
-    
-    if (!counterStore || !userStore) throw new Error("Stores not available");
-    
-    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
-    expect(userStore.getSnapshot()).toEqual({ name: 'Test' });
-
-    // Creating a new store via setState
-    mockBridge.setState('profile', { id: 1, avatar: 'url' });
-    const profileStore = mockBridge.getStore('profile');
-    expect(profileStore).toBeDefined();
-    
-    // Reset all stores to initial state
-    mockBridge.reset();
-    expect(counterStore.getSnapshot()).toEqual({ value: 0 });
-    expect(userStore.getSnapshot()).toEqual({ name: 'Test' });
-  });
-
-  test('handles component initialization correctly', () => {
-    // Component test using mock bridge
-    render(
-      <BridgeContext.Provider bridge={mockBridge}>
-        <CounterContext.Provider>
-          <CounterComponent />
-        </CounterContext.Provider>
-      </BridgeContext.Provider>
-    );
-
-    // Check initial render
-    expect(screen.getByText('Count: 0')).toBeInTheDocument();
-
-    // Get and update the store
-    const counterStore = mockBridge.getStore('counter');
-    if (!counterStore) throw new Error("Store not available");
-    
-    counterStore.produce(state => {
-      state.value = 5;
-    });
-
-    // Verify component updated
-    expect(screen.getByText('Count: 5')).toBeInTheDocument();
-  });
-});
-```
-
-### Choosing Between Reset and setState
-
-When testing store lifecycle, you have two main options:
-
-1. Use `reset(storeKey?)` when:
-   - You need to restore stores to their initial state from when createMockBridge was called
-   - You're cleaning up between tests
-   - You want to clear event history
-   - If you provide a specific storeKey, only that store is reset. If no key is provided, all stores are reset.
-
-2. Use `setState(storeKey, state)` when:
-   - You want to set a store to a specific state regardless of initial state
-   - You're creating a new store that wasn't initialized during bridge creation
-   - You need to simulate specific state scenarios for testing
-
-### Component Testing
-
-Test React components:
-
-```typescript
-describe('Component Integration', () => {
-  test('handles store selection correctly', () => {
-    const bridge = createMockBridge<AppStores>({
-      initialState: {
-        counter: { value: 0 },
-        user: { name: 'Test', age: 30 }
-      }
-    });
-
-    function TestComponent() {
-      // Using store-specific context
-      const counterValue = CounterContext.useSelector(state => state.value);
-      const store = CounterContext.useStore();
-
-      return (
-        <div>
-          <p>Count: {counterValue}</p>
-          <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>+</button>
-        </div>
-      );
-    }
-
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <CounterContext.Provider>
-          <TestComponent />
-        </CounterContext.Provider>
-      </BridgeContext.Provider>
-    );
-
-    expect(screen.getByText('Count: 0')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('+'));
-    
-    // Check event was recorded
-    const events = bridge.getHistory('counter');
-    expect(events).toEqual([{ type: 'INCREMENT' }]);
-  });
-
-  test('handles bridge support states', () => {
-    const bridge = createMockBridge<AppStores>({
-      isSupported: false,
-      initialState: {
-        counter: { value: 0 }
-      }
-    });
-
-    function TestComponent() {
-      return (
-        <>
-          <BridgeContext.Supported>
-            <div>Supported</div>
-          </BridgeContext.Supported>
-          <BridgeContext.Unsupported>
-            <div>Unsupported</div>
-          </BridgeContext.Unsupported>
-        </>
-      );
-    }
-
-    render(
-      <BridgeContext.Provider bridge={bridge}>
-        <TestComponent />
-      </BridgeContext.Provider>
-    );
-
-    expect(screen.queryByText('Supported')).not.toBeInTheDocument();
-    expect(screen.getByText('Unsupported')).toBeInTheDocument();
-  });
-});
-```
-
-## Mock Bridge Usage
-
-### Basic Setup
-
-```typescript
+// Create mock bridge with initial state
 const mockBridge = createMockBridge<AppStores>({
   initialState: {
-    counter: { value: 0 },
-    user: { name: 'Test', age: 30 }
-  }
-});
-```
-
-### Using the getSnapshot Method
-
-To access the current state of a store, always retrieve the store first and then use the `getSnapshot()` method on the store:
-
-```typescript
-// Correct pattern: get the store, then use store.getSnapshot()
-const counterStore = bridge.getStore('counter');
-if (counterStore) {
-  const state = counterStore.getSnapshot();
-  console.log('Counter value:', state.value);
-}
-```
-
-### Advanced Configuration
-
-```typescript
-const mockBridge = createMockBridge<AppStores>({
-  isSupported: true,
-  initialState: {
-    counter: { value: 0 },
-    user: { name: 'Test', age: 30 }
-  }
-});
-
-// Get specific stores
-const counterStore = mockBridge.getStore('counter');
-const userStore = mockBridge.getStore('user');
-
-// Work with store methods
-if (counterStore) {
-  // Listen for changes
-  const unsubscribe = counterStore.subscribe(state => {
-    console.log('Counter state updated:', state);
-  });
-  
-  // Update state directly with produce
-  counterStore.produce(state => {
-    state.value += 1;
-  });
-  
-  // Dispatch events (they're recorded but don't change state by default)
-  counterStore.dispatch({ type: 'INCREMENT' });
-  
-  // Check event history
-  const events = mockBridge.getHistory('counter');
-  console.log('Events:', events);
-  
-  // Stop listening
-  unsubscribe();
-}
-
-// Create a new store on the fly
-mockBridge.setState('settings', { theme: 'dark', notifications: true });
-
-// Reset a specific store to initial state and clear its events
-mockBridge.reset('counter');
-
-// Reset all stores to initial state and clear all events
-mockBridge.reset();
-```
-
-## Testing Web Applications
-
-When testing web applications that use the bridge, we use the mock bridge to simulate the native bridge's behavior. This allows us to test web components in isolation.
-
-### Basic Setup
-
-```typescript
-// Create a mock bridge that simulates native bridge behavior
-const mockBridge = createMockBridge<AppStores>({
-  stores: {
     counter: { value: 0 }
   }
 });
 
-// Test a web component that uses the bridge
-test('Counter component updates state', () => {
-  render(
-    <BridgeContext.Provider bridge={mockBridge}>
-      <CounterContext.Initialized>
-        <CounterComponent />
-      </CounterContext.Initialized>
-    </BridgeContext.Provider>
-  );
+// Create context with the mock bridge
+const TestBridgeContext = createBridgeContext<AppStores>();
+const TestCounterContext = TestBridgeContext.createStoreContext('counter');
 
-  // Initial state
-  expect(screen.getByText('Count: 0')).toBeInTheDocument();
-
-  // Simulate user interaction
-  fireEvent.click(screen.getByText('+'));
-  
-  // Verify state update
-  expect(screen.getByText('Count: 1')).toBeInTheDocument();
-});
+// Render component with the test context
+const { getByText } = render(
+  <TestBridgeContext.Provider bridge={mockBridge}>
+    <TestCounterContext.Provider>
+      <Counter />
+    </TestCounterContext.Provider>
+  </TestBridgeContext.Provider>
+);
 ```
 
-### Testing Bridge Support
+## Testing User-Visible Functionality
 
-Test how your web app handles unsupported environments:
+In many cases, it's best to focus on testing the user-visible functionality rather than implementation details. This approach ensures that:
+
+1. Tests remain stable even when implementation details change
+2. Your tests verify what users actually care about
+3. Code refactoring doesn't break tests unnecessarily
+
+### Focusing on What Users See
 
 ```typescript
-test('App shows fallback when bridge is not supported', () => {
-  const mockBridge = createMockBridge<AppStores>({
-    isSupported: false,
-    initialState: {
-      counter: { value: 0 }
-    }
+import { render, fireEvent } from '@testing-library/react-native';
+import App from '../App';
+
+describe('App', () => {
+  it('displays the counter and responds to user interactions', () => {
+    // Render the App
+    const { getByText } = render(<App />);
+    
+    // Verify elements are visible
+    expect(getByText('Counter: 0')).toBeTruthy();
+    expect(getByText('+')).toBeTruthy();
+    expect(getByText('-')).toBeTruthy();
+    
+    // Test user interactions
+    fireEvent.press(getByText('+'));
+    expect(getByText('Counter: 1')).toBeTruthy();
+    
+    fireEvent.press(getByText('-'));
+    expect(getByText('Counter: 0')).toBeTruthy();
   });
-
-  render(
-    <BridgeContext.Provider bridge={mockBridge}>
-      <BridgeContext.Unsupported>
-        <FallbackComponent />
-      </BridgeContext.Unsupported>
-    </BridgeContext.Provider>
-  );
-
-  expect(screen.getByText('Bridge not supported')).toBeInTheDocument();
+  
+  it('renders the WebView component', () => {
+    const { UNSAFE_getAllByType } = render(<App />);
+    
+    // Verify WebView is rendered without testing implementation details
+    const webViews = UNSAFE_getAllByType(WebView);
+    expect(webViews.length).toBeGreaterThan(0);
+  });
 });
 ```
 
-### Testing Store Initialization
+### Benefits of Testing User-Visible Functionality
 
-Test how components handle store initialization states:
+1. **Resilience to Change**: Tests continue to work even if you modify internal implementation
+2. **User-Centered**: Tests focus on the actual user experience
+3. **Simpler Tests**: Tests are often easier to write and understand
+4. **Better Maintainability**: Less need to update tests when refactoring code
+
+### When to Use Implementation Testing
+
+While focusing on user-visible functionality is often best, there are cases where testing implementation details is valuable:
+
+1. Complex state management logic that needs verification
+2. Critical internal algorithms or processes
+3. Edge cases that are difficult to trigger through the UI
+
+The app-bridge offers tools for both approaches, letting you choose the right testing strategy for each situation.
+
+## Testing WebView Store Integration
+
+When testing the integration between native and web via WebView, focus on verifying that the native store correctly synchronizes with the WebView. This requires creating a mock WebView that can capture messages sent from native and simulate messages from web.
+
+### Simple WebView Mock for Testing
 
 ```typescript
-test('Component shows loading state while store initializes', () => {
-  // Create a bridge with no initial stores
-  const mockBridge = createMockBridge<AppStores>();
+// Define a type for our mocked WebView
+interface MockWebViewStatic {
+  sentMessages: any[];
+  onMessageHandler?: (event: { nativeEvent: { data: string } }) => void;
+  simulateMessage: (message: any) => void;
+}
 
-  render(
-    <BridgeContext.Provider bridge={mockBridge}>
-      <CounterContext.Loading>
-        <LoadingComponent />
-      </CounterContext.Loading>
-    </BridgeContext.Provider>
-  );
-
-  expect(screen.getByText('Loading...')).toBeInTheDocument();
-
-  // Initialize the store
-  mockBridge.setState('counter', { value: 0 });
-
-  // Verify loading state is removed
-  expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+// Create a mock WebView for testing
+jest.mock('react-native-webview', () => {
+  const React = require('react');
+  
+  class MockWebView extends React.Component {
+    static sentMessages: any[] = [];
+    static onMessageHandler?: (event: { nativeEvent: { data: string } }) => void;
+    
+    constructor(props: any) {
+      super(props);
+      MockWebView.sentMessages = [];
+      
+      if (props.onMessage) {
+        MockWebView.onMessageHandler = props.onMessage;
+      }
+    }
+    
+    // Record messages sent to the WebView
+    postMessage(message: string) {
+      MockWebView.sentMessages.push(JSON.parse(message));
+    }
+    
+    // Method to simulate messages from WebView to native
+    static simulateMessage(message: any) {
+      if (MockWebView.onMessageHandler) {
+        MockWebView.onMessageHandler({
+          nativeEvent: {
+            data: typeof message === 'string' ? message : JSON.stringify(message)
+          }
+        });
+      }
+    }
+    
+    render() {
+      return React.createElement('div', this.props, this.props.children);
+    }
+  }
+  
+  return {
+    __esModule: true,
+    default: MockWebView
+  };
 });
 ```
+
+### Core Integration Tests
+
+To test the core bridge functionality, focus on these three key aspects:
+
+1. **State Initialization**: Verify the native store's state is sent to the WebView
+   ```typescript
+   it('initializes the WebView with store state', async () => {
+     render(<App />);
+     
+     // Simulate WebView ready
+     await act(async () => {
+       MockedWebView.simulateMessage({ type: 'WEBVIEW_READY' });
+       await new Promise(resolve => setTimeout(resolve, 0));
+     });
+     
+     // Check messages sent to WebView
+     const stateInitMsg = MockedWebView.sentMessages.find(
+       msg => msg.type === 'STATE_INIT' && msg.storeKey === 'counter'
+     );
+     
+     expect(stateInitMsg).toBeDefined();
+     expect(stateInitMsg.data).toHaveProperty('value');
+   });
+   ```
+
+2. **State Updates**: Verify changes in the native store are sent to WebView
+   ```typescript
+   it('sends state updates to WebView', async () => {
+     const { getByText } = render(<App />);
+     
+     // Simulate WebView ready
+     await act(async () => {
+       MockedWebView.simulateMessage({ type: 'WEBVIEW_READY' });
+       await new Promise(resolve => setTimeout(resolve, 0));
+     });
+     
+     // Clear messages
+     MockedWebView.sentMessages = [];
+     
+     // Trigger state change in native
+     fireEvent.press(getByText('+'));
+     
+     // Check for state update message
+     const updateMsg = MockedWebView.sentMessages.find(
+       msg => msg.type === 'STATE_UPDATE' && msg.storeKey === 'counter'
+     );
+     
+     expect(updateMsg).toBeDefined();
+     expect(updateMsg.operations).toBeDefined();
+   });
+   ```
+
+3. **Event Processing**: Verify events from WebView update the native store
+   ```typescript
+   it('processes events from WebView', async () => {
+     const { getByText } = render(<App />);
+     
+     // Simulate WebView ready
+     await act(async () => {
+       MockedWebView.simulateMessage({ type: 'WEBVIEW_READY' });
+       await new Promise(resolve => setTimeout(resolve, 0));
+     });
+     
+     // Initial state check
+     expect(getByText('Native Counter: 0')).toBeTruthy();
+     
+     // Simulate WebView sending event
+     await act(async () => {
+       MockedWebView.simulateMessage({
+         type: 'EVENT',
+         storeKey: 'counter',
+         event: { type: 'INCREMENT' }
+       });
+       await new Promise(resolve => setTimeout(resolve, 0));
+     });
+     
+     // Verify store was updated
+     expect(getByText('Native Counter: 1')).toBeTruthy();
+   });
+   ```
+
+## Using the Mock Bridge
+
+The app-bridge provides a `createMockBridge` utility specifically for testing:
+
+```typescript
+import { createMockBridge } from '@open-game-system/app-bridge';
+import type { AppStores } from './types';
+
+describe('Counter Component', () => {
+  let mockBridge;
+  
+  beforeEach(() => {
+    // Create a fresh mock bridge for each test
+    mockBridge = createMockBridge<AppStores>({
+      initialState: {
+        counter: { value: 0 }
+      }
+    });
+  });
+  
+  it('maintains event history', () => {
+    // Get the counter store
+    const counterStore = mockBridge.getStore('counter');
+    
+    // Dispatch an event
+    counterStore?.dispatch({ type: 'INCREMENT' });
+    
+    // Check event history
+    const history = mockBridge.getHistory('counter');
+    expect(history).toEqual([{ type: 'INCREMENT' }]);
+  });
+  
+  it('allows direct state manipulation', () => {
+    // Set state directly
+    mockBridge.setState('counter', { value: 42 });
+    
+    // Get the counter store
+    const counterStore = mockBridge.getStore('counter');
+    expect(counterStore?.getSnapshot().value).toBe(42);
+  });
+});
+```
+
+For complete examples of testing strategies, see the test files in the example apps:
+- `examples/expo-app/__tests__/AppBridge-test.tsx`: For React Native with WebView example
+- `examples/react-app/src/__tests__/`: For React web testing examples

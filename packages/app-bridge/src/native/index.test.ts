@@ -214,7 +214,7 @@ describe("createNativeBridge", () => {
       });
       
       const webView = new MockWebView();
-      const consoleLogSpy = vi.spyOn(console, "log");
+      const consoleWarnSpy = vi.spyOn(console, "warn");
       
       bridge.registerWebView(webView);
       
@@ -233,9 +233,12 @@ describe("createNativeBridge", () => {
       expect(counterStore?.getSnapshot()).toEqual({ value: 10 });
       
       // Should log that no producer was found
-      expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining("No producer found for store counter")
       );
+
+      // Restore the spy
+      consoleWarnSpy.mockRestore();
     });
     
     test("handles events with multiple producers", () => {

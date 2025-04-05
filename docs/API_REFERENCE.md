@@ -162,6 +162,13 @@ export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStor
    * @param storeKey Optional store key to reset only a specific store
    */
   reset: (storeKey?: keyof TStores) => void;
+
+  /**
+   * Process a message received from the WebView
+   * Use this method directly when you don't want to modify the WebView's onMessage handler
+   * @param message Either a raw message string or a WebView message event object
+   */
+  handleWebMessage: (message: string | { nativeEvent: { data: string } }) => void;
 }
 ```
 

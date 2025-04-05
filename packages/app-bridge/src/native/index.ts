@@ -60,6 +60,53 @@ export function createNativeBridge<TStores extends BridgeStores>(
   };
 
   /**
+   * Process a message received from a WebView
+   * This internal function handles the actual message processing logic
+   */
+  const processWebViewMessage = (data: string): void => {
+    let parsedData: WebToNativeMessage;
+
+    try {
+      parsedData = JSON.parse(data);
+    } catch (e) {
+      console.warn("Failed to parse message from WebView:", data);
+      return;
+    }
+
+    if (parsedData.type === "EVENT") {
+      // Get the store key and event from the message
+      const { storeKey, event } = parsedData;
+
+      // Dispatch the event to the appropriate store
+      if (storeKey && event) {
+        const typedStoreKey = storeKey as keyof TStores;
+        const typedEvent = event as TStores[typeof typedStoreKey]["events"];
+
+        // Check if we have a producer for this store
+        const producer = producers[typedStoreKey as keyof typeof producers] as ((
+            draft: TStores[typeof typedStoreKey]["state"],
+            event: TStores[typeof typedStoreKey]["events"]
+          ) => void) | undefined;
+
+        if (producer) {
+          // Use the store-specific producer to handle the event
+          bridge.produce(typedStoreKey, (draft) => {
+            producer(draft, typedEvent);
+          });
+        } else {
+          // No producer found for this store, just notify listeners
+          console.warn(
+            `No producer found for store ${String(
+              typedStoreKey
+            )}, event: ${JSON.stringify(event)}`
+          );
+          notifyListeners(typedStoreKey);
+        }
+      }
+    }
+  };
+
+  /**
    * Create a message handler that preserves the original handler
    */
   const createMessageHandler = (
@@ -75,48 +122,7 @@ export function createNativeBridge<TStores extends BridgeStores>(
       try {
         // Extract the data from the native event
         const data = event.nativeEvent.data;
-        let parsedData: WebToNativeMessage;
-
-        try {
-          parsedData = JSON.parse(data);
-        } catch (e) {
-          console.warn("Failed to parse message from WebView:", data);
-          return;
-        }
-
-        if (parsedData.type === "EVENT") {
-          console.log("Received event from web:", parsedData);
-
-          // Get the store key and event from the message
-          const { storeKey, event } = parsedData;
-
-          // Dispatch the event to the appropriate store
-          if (storeKey && event) {
-            const typedStoreKey = storeKey as keyof TStores;
-            const typedEvent = event as TStores[typeof typedStoreKey]["events"];
-
-            // Check if we have a producer for this store
-            const producer = producers[typedStoreKey as keyof typeof producers] as ((
-                draft: TStores[typeof typedStoreKey]["state"],
-                event: TStores[typeof typedStoreKey]["events"]
-              ) => void) | undefined;
-
-            if (producer) {
-              // Use the store-specific producer to handle the event
-              bridge.produce(typedStoreKey, (draft) => {
-                producer(draft, typedEvent);
-              });
-            } else {
-              // No producer found for this store, just notify listeners
-              console.log(
-                `No producer found for store ${String(
-                  typedStoreKey
-                )}, event: ${JSON.stringify(event)}`
-              );
-              notifyListeners(typedStoreKey);
-            }
-          }
-        }
+        processWebViewMessage(data);
       } catch (error) {
         console.error("Error handling message:", error);
       }
@@ -188,7 +194,6 @@ export function createNativeBridge<TStores extends BridgeStores>(
         dispatch: (event: TStores[K]["events"]) => {
           // This is mainly for internal use but we expose it for consistency
           // Actual implementation is up to the native app
-          console.log(`Store ${String(storeKey)} received event:`, event);
           // Native apps should use produce rather than dispatch
         },
       };
@@ -293,6 +298,25 @@ export function createNativeBridge<TStores extends BridgeStores>(
             notifyListeners(key as keyof TStores);
           }
         });
+      }
+    },
+    
+    /**
+     * Process a message received from the WebView
+     * Use this method directly when you don't want to modify the WebView's onMessage handler
+     * 
+     * @param message The message received from the WebView
+     */
+    handleWebMessage: (message: string | { nativeEvent: { data: string } }) => {
+      try {
+        // Handle both direct message strings and event objects
+        const messageData = typeof message === 'string' 
+          ? message 
+          : message.nativeEvent.data;
+          
+        processWebViewMessage(messageData);
+      } catch (error) {
+        console.error("Error processing WebView message:", error);
       }
     },
 

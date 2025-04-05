@@ -140,6 +140,12 @@ export interface NativeBridge<TStores extends BridgeStores> {
   ) => void;
 
   /**
+   * Use this method directly when you don't want to modify the WebView's onMessage handler
+   * @param message Either a raw message string or a WebView message event object
+   */
+  handleWebMessage: (message: string | { nativeEvent: { data: string } }) => void;
+
+  /**
    * Registers a WebView to receive state updates.
    * This will automatically set up message handling and inject the necessary JavaScript.
    */

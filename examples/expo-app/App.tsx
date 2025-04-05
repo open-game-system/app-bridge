@@ -3,14 +3,14 @@ import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button,
+  NativeSyntheticEvent,
   Platform,
   SafeAreaView,
   StyleSheet,
   Text,
   View,
-  NativeSyntheticEvent,
 } from "react-native";
-import WebView, { WebViewMessageEvent } from "react-native-webview";
+import WebView from "react-native-webview";
 import { CounterEvents, CounterState } from "../shared/types";
 
 type AppStores = {
@@ -39,26 +39,27 @@ const App = () => {
           counter: (draft, event) => {
             // Use a switch statement to handle different event types
             switch (event.type) {
-              case 'INCREMENT':
+              case "INCREMENT":
                 // Immer allows us to "mutate" the draft directly
                 draft.value += 1;
                 break;
-                
-              case 'DECREMENT':
+
+              case "DECREMENT":
                 draft.value -= 1;
                 break;
-                
-              case 'SET':
+
+              case "SET":
                 draft.value = event.value;
                 break;
-                
+
               default:
-                console.log(`Unhandled counter event: ${(event as any).type}`);
+                // Use console.warn for unhandled events as it indicates a potential issue
+                console.warn(`Unhandled counter event: ${(event as any).type}`);
                 break;
             }
-          }
+          },
           // Add other store producers as needed for handling their events
-        }
+        },
       }),
     []
   );
@@ -66,13 +67,12 @@ const App = () => {
   useEffect(() => {
     // Get a reference to the counter store
     const counterStore = bridge.getStore("counter");
-    
+
     // Subscribe to counter changes
     const unsubscribe = counterStore?.subscribe((state) => {
-      console.log("Counter store updated:", state);
       setCounterValue(state.value);
     });
-    
+
     return () => {
       // Clean up subscriptions when component unmounts
       unsubscribe?.();
@@ -82,28 +82,25 @@ const App = () => {
   // Register WebView with the bridge only after it's ready
   useEffect(() => {
     if (webViewRef.current && webViewReady) {
-      console.log("WebView is ready, registering with bridge");
       // Register the WebView with the bridge
       const unregisterWebView = bridge.registerWebView(webViewRef.current);
-      
+
       // Force update all stores to ensure WebView gets initial state
       // Use the store keys we know exist in our AppStores type
-      const storeKeys: (keyof AppStores)[] = ['counter'];
-      storeKeys.forEach(storeKey => {
+      const storeKeys: (keyof AppStores)[] = ["counter"];
+      storeKeys.forEach((storeKey) => {
         const store = bridge.getStore(storeKey);
         if (store) {
-          console.log(`Forcing update for store: ${storeKey}`);
           // Use produce with identity function to trigger an update
           // without changing the state
-          bridge.produce(storeKey, draft => {
+          bridge.produce(storeKey, (draft) => {
             // This is an identity function that doesn't change state
             // but will trigger the store to send its state to WebView
           });
         }
       });
-      
+
       return () => {
-        console.log("Unregistering WebView from bridge");
         unregisterWebView();
       };
     }
@@ -114,43 +111,48 @@ const App = () => {
     bridge.produce("counter", (draft) => {
       draft.value += 1;
     });
-    
+
   const decrementCounter = () =>
     bridge.produce("counter", (draft) => {
       draft.value -= 1;
     });
-    
+
   const resetCounter = () => bridge.setState("counter", { value: 0 });
 
   // Handle messages FROM the WebView
-  const handleWebViewMessage = useCallback((event: NativeSyntheticEvent<{ data: string }>) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      console.log("Message from WebView:", data);
-      
-      // If this is an event message, manually process it
-      if (data.type === 'EVENT' && data.storeKey && data.event) {
-        const { storeKey, event } = data;
-        
-        // Handle counter events specifically
-        if (storeKey === 'counter') {
-          if (event.type === 'INCREMENT') {
-            incrementCounter();
-          } else if (event.type === 'DECREMENT') {
-            decrementCounter();
-          } else if (event.type === 'SET' && 'value' in event) {
-            bridge.setState('counter', { value: event.value });
+  const handleWebViewMessage = useCallback(
+    (event: NativeSyntheticEvent<{ data: string }>) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data);
+
+        // If this is an event message, manually process it
+        if (data.type === "EVENT" && data.storeKey && data.event) {
+          const { storeKey, event } = data;
+
+          // Handle counter events specifically
+          if (storeKey === "counter") {
+            if (event.type === "INCREMENT") {
+              incrementCounter();
+            } else if (event.type === "DECREMENT") {
+              decrementCounter();
+            } else if (event.type === "SET" && "value" in event) {
+              bridge.setState("counter", { value: event.value });
+            }
           }
+        } else if (data.type === "WEBVIEW_READY") {
+          // WebView is now ready to receive messages
+          setWebViewReady(true);
         }
-      } else if (data.type === 'WEBVIEW_READY') {
-        // WebView is now ready to receive messages
-        console.log("Received WEBVIEW_READY message");
-        setWebViewReady(true);
+      } catch (e) {
+        console.warn(
+          "Error parsing WebView message:",
+          event.nativeEvent.data,
+          e
+        );
       }
-    } catch (e) {
-      console.warn('Error parsing WebView message:', event.nativeEvent.data, e);
-    }
-  }, [bridge]);
+    },
+    [bridge]
+  );
 
   // Platform-specific WebView source
   const webviewSource = Platform.select({
@@ -212,9 +214,9 @@ const App = () => {
 
       {/* WebView container */}
       <View style={styles.webviewContainer}>
-        <WebView 
+        <WebView
           ref={webViewRef}
-          source={webviewSource} 
+          source={webviewSource}
           style={styles.webview}
           onMessage={handleWebViewMessage}
           injectedJavaScript={injectedJavaScript}
