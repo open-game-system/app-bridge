@@ -121,6 +121,14 @@ jobs:
           fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
         "
     
+    - name: Copy README and LICENSE
+      run: |
+        cp README.md packages/app-bridge/
+        cp LICENSE packages/app-bridge/ 2>/dev/null || :
+        # Copy docs folder
+        mkdir -p packages/app-bridge/docs
+        cp -R docs/* packages/app-bridge/docs/ 2>/dev/null || :
+    
     - name: Publish package to GitHub Packages
       env:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -267,6 +275,14 @@ jobs:
       run: |
         cd packages/app-bridge
         npm version ${{ steps.version.outputs.NEW_VERSION }} --no-git-tag-version
+    
+    - name: Copy README and LICENSE
+      run: |
+        cp README.md packages/app-bridge/
+        cp LICENSE packages/app-bridge/ 2>/dev/null || :
+        # Copy docs folder
+        mkdir -p packages/app-bridge/docs
+        cp -R docs/* packages/app-bridge/docs/ 2>/dev/null || :
     
     - name: Publish package to npm
       env:

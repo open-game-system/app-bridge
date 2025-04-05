@@ -33,7 +33,10 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs"
   ],
   "scripts": {
     "build": "tsup",
@@ -66,5 +69,8 @@
   },
   "peerDependencies": {
     "react": ">=16.8.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
