@@ -1,11 +1,9 @@
-import type { NativeBridge, BridgeStores, Store, NativeStore, WebToNativeMessage, NativeToWebMessage } from '../types';
+import type { NativeBridge, BridgeStores, Store, NativeStore, WebToNativeMessage, NativeToWebMessage, BridgeWebView } from '../types';
 import { produce } from 'immer';
 import { compare, applyPatch, Operation } from 'fast-json-patch';
 
-export interface WebView {
-  injectJavaScript: (script: string) => void;
-  onMessage?: (event: { data: string }) => void;
-}
+// Use the BridgeWebView interface from the types file
+export type WebView = BridgeWebView;
 
 interface NativeBridgeConfig<TStores extends BridgeStores> {
   initialState?: { [K in keyof TStores]?: TStores[K]['state'] };
@@ -19,6 +17,8 @@ export function createNativeBridge<TStores extends BridgeStores>(
   let state: { [K in keyof TStores]?: TStores[K]['state'] } = JSON.parse(JSON.stringify(initialState));
   const listeners = new Map<keyof TStores, Set<(state: any) => void>>();
   const webViews = new Set<WebView>();
+  const originalOnMessageHandlers = new WeakMap<WebView, WebView['onMessage']>();
+  const messageHandlers = new WeakMap<WebView, WebView['onMessage']>();
 
   const notifyListeners = <K extends keyof TStores>(storeKey: K) => {
     const storeListeners = listeners.get(storeKey);
@@ -28,16 +28,90 @@ export function createNativeBridge<TStores extends BridgeStores>(
   };
 
   const broadcastToWebViews = (message: NativeToWebMessage) => {
+    const messageString = JSON.stringify(message);
+    
     webViews.forEach(webView => {
-      webView.injectJavaScript(`
-        window.dispatchEvent(new MessageEvent('message', {
-          data: ${JSON.stringify(message)}
-        }));
-      `);
+      // Use postMessage for communication
+      webView.postMessage(messageString);
     });
   };
 
-  return {
+  /**
+   * Create a message handler that preserves the original handler
+   */
+  const createMessageHandler = (
+    webView: WebView,
+    originalHandler?: WebView['onMessage']
+  ) => {
+    return (event: { nativeEvent: { data: string } }) => {
+      // Always call the original handler first if it exists
+      if (originalHandler) {
+        originalHandler(event);
+      }
+
+      try {
+        // Extract the data from the native event
+        const data = event.nativeEvent.data;
+        let parsedData: WebToNativeMessage;
+        
+        try {
+          parsedData = JSON.parse(data);
+        } catch (e) {
+          console.warn('Failed to parse message from WebView:', data);
+          return;
+        }
+        
+        if (parsedData.type === 'EVENT') {
+          console.log('Received event from web:', parsedData);
+          
+          // Get the store key and event from the message
+          const { storeKey, event } = parsedData;
+          
+          // Dispatch the event to the appropriate store
+          if (storeKey && event) {
+            // Handle events based on their type
+            switch (event.type) {
+              case 'INCREMENT':
+                bridge.produce(storeKey as keyof TStores, (draft: any) => {
+                  if (typeof draft.value === 'number') {
+                    draft.value += 1;
+                  }
+                });
+                break;
+                
+              case 'DECREMENT':
+                bridge.produce(storeKey as keyof TStores, (draft: any) => {
+                  if (typeof draft.value === 'number') {
+                    draft.value -= 1;
+                  }
+                });
+                break;
+                
+              case 'SET':
+                if ('value' in event) {
+                  bridge.produce(storeKey as keyof TStores, (draft: any) => {
+                    draft.value = event.value;
+                  });
+                }
+                break;
+                
+              default:
+                // For other events, just notify listeners
+                notifyListeners(storeKey as keyof TStores);
+                break;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error handling message:', error);
+      }
+    };
+  };
+
+  // Create a self-reference for use in the event handlers
+  const bridge = {} as NativeBridge<TStores>;
+
+  Object.assign(bridge, {
     isSupported: () => true,
 
     subscribe: (listener: () => void) => {
@@ -196,40 +270,80 @@ export function createNativeBridge<TStores extends BridgeStores>(
     },
 
     registerWebView: (webView: WebView) => {
+      // Verify the WebView has a postMessage method
+      if (!webView.postMessage) {
+        console.error('WebView does not have a postMessage method. Communication will not work.');
+        return () => {}; // Return no-op function if WebView doesn't support postMessage
+      }
+      
+      // Store the original onMessage handler if it exists
+      const originalOnMessage = webView.onMessage;
+      if (originalOnMessage) {
+        originalOnMessageHandlers.set(webView, originalOnMessage);
+      }
+      
+      // Set up a new handler that preserves the original
+      const newHandler = createMessageHandler(webView, originalOnMessage);
+      webView.onMessage = newHandler;
+      messageHandlers.set(webView, newHandler);
+      
+      // Add the WebView to our set
       webViews.add(webView);
       
       // Send initial state for all stores
       Object.entries(state).forEach(([key, value]) => {
         if (value !== undefined) {
-          webView.injectJavaScript(`
-            window.dispatchEvent(new MessageEvent('message', {
-              data: ${JSON.stringify({
-                type: 'STATE_INIT',
-                storeKey: key,
-                data: value,
-              })}
-            }));
-          `);
+          const initMessage = {
+            type: 'STATE_INIT',
+            storeKey: key,
+            data: value,
+          };
+          
+          // Use postMessage to send initial state
+          webView.postMessage(JSON.stringify(initMessage));
         }
       });
       
-      if (webView.onMessage) {
-        webView.onMessage = (event) => {
-          try {
-            const message = JSON.parse(event.data) as WebToNativeMessage;
-            if (message.type === 'EVENT') {
-              // Handle events from web view
-              notifyListeners(message.storeKey as keyof TStores);
-            }
-          } catch (error) {
-            console.error('Error handling message:', error);
-          }
-        };
-      }
+      // Return an unsubscribe function
+      return () => {
+        // Restore the original onMessage handler if it existed
+        if (originalOnMessage) {
+          webView.onMessage = originalOnMessage;
+        } else {
+          // If there was no original handler, remove our handler
+          // @ts-ignore - We know we're setting it to undefined which may not be in the type
+          webView.onMessage = undefined;
+        }
+        
+        // Remove from the WebViews set
+        webViews.delete(webView);
+        
+        // Clean up the WeakMaps
+        originalOnMessageHandlers.delete(webView);
+        messageHandlers.delete(webView);
+      };
     },
 
+    // Keep for backwards compatibility, but users should use the unsubscribe function from registerWebView
     unregisterWebView: (webView: WebView) => {
+      // Restore the original onMessage handler if it existed
+      const originalOnMessage = originalOnMessageHandlers.get(webView);
+      if (originalOnMessage) {
+        webView.onMessage = originalOnMessage;
+      } else {
+        // If there was no original handler, remove our handler
+        // @ts-ignore - We know we're setting it to undefined which may not be in the type
+        webView.onMessage = undefined;
+      }
+      
+      // Remove from the WebViews set
       webViews.delete(webView);
+      
+      // Clean up the WeakMaps
+      originalOnMessageHandlers.delete(webView);
+      messageHandlers.delete(webView);
     },
-  };
+  });
+
+  return bridge;
 }

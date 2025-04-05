@@ -152,6 +152,26 @@ export interface Bridge<TStores extends BridgeStoreDefinitions = BridgeStoreDefi
 }
 
 /**
+ * Interface for a WebView that can be registered with the bridge.
+ * This interface aligns with React Native WebView's API.
+ */
+export interface BridgeWebView {
+  /**
+   * Required method to send messages from native to web.
+   * This is the standard method for communicating with the WebView content.
+   * @param message The message to send to the WebView as a string
+   */
+  postMessage: (message: string) => void;
+  
+  /**
+   * Event handler for messages from web to native.
+   * Different WebView implementations may have different event formats.
+   * The bridge will handle these differences internally.
+   */
+  onMessage?: (event: { nativeEvent: { data: string } }) => void;
+}
+
+/**
  * Interface for the native bridge that hosts WebViews and manages state.
  * 
  * @template TStores - The type of store definitions for this bridge
@@ -174,13 +194,15 @@ export interface NativeBridge<TStores extends BridgeStoreDefinitions = BridgeSto
 
   /**
    * Register a WebView to receive state updates
+   * Returns an unsubscribe function that will unregister the WebView when called
    */
-  registerWebView: (webView: { injectJavaScript: (script: string) => void; onMessage?: (event: { data: string }) => void }) => void;
+  registerWebView: (webView: BridgeWebView) => () => void;
   
   /**
    * Unregister a WebView from receiving state updates
+   * @deprecated Use the unsubscribe function returned by registerWebView instead
    */
-  unregisterWebView: (webView: { injectJavaScript: (script: string) => void; onMessage?: (event: { data: string }) => void }) => void;
+  unregisterWebView: (webView: BridgeWebView) => void;
   
   /**
    * Update state using immer-style producer function
