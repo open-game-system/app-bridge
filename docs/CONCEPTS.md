@@ -254,6 +254,63 @@ flowchart TD
 3. **Immer Integration**: Use Immer's draft objects for intuitive state updates
 4. **Event Handling**: Centralized, clean switch statements for handling different event types
 
+### Type Safety in Producers
+
+When defining your event types as discriminated unions with TypeScript, you get excellent type checking in your producers:
+
+```typescript
+// Define event types as discriminated unions
+type CounterEvents = 
+  | { type: 'INCREMENT' }
+  | { type: 'DECREMENT' }
+  | { type: 'SET'; value: number };  // value is required
+
+// In your producer
+counter: (draft, event) => {
+  switch (event.type) {
+    case 'INCREMENT':
+      draft.value += 1;
+      break;
+    case 'SET':
+      // TypeScript knows 'value' exists and is a number
+      // No need for extra type guards
+      draft.value = event.value;
+      break;
+  }
+}
+```
+
+However, if you have optional properties in your event types, you will need type guards:
+
+```typescript
+// Event with optional property
+type CounterEvents = 
+  | { type: 'INCREMENT' }
+  | { type: 'DECREMENT' }
+  | { type: 'SET'; value?: number };  // value is optional
+
+// In your producer
+counter: (draft, event) => {
+  switch (event.type) {
+    case 'INCREMENT':
+      draft.value += 1;
+      break;
+    case 'SET':
+      // Type guard needed because value is optional
+      if (event.value !== undefined) {
+        draft.value = event.value;
+      }
+      break;
+  }
+}
+```
+
+Key points about type safety:
+- TypeScript narrows the event type based on the `type` property when you use a switch statement
+- Make sure your properties are required (not optional with `?`) to avoid needing extra type guards
+- If you do have optional properties, use proper nullish checks (e.g., `if (event.value !== undefined)`)
+- For complete type safety, consider making all event properties required wherever possible
+
 ## React Integration
 
 The React integration provides hooks and context for easy state management:

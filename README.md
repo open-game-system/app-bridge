@@ -126,6 +126,29 @@ import { WebView } from 'react-native-webview';
 const bridge = createNativeBridge<AppStores>({
   initialState: {
     counter: { value: 0 }
+  },
+  // Define producers to handle events from the web side
+  producers: {
+    // Counter store producer - required to handle events from the web
+    counter: (draft, event) => {
+      // Use a switch statement to handle different event types
+      switch (event.type) {
+        case 'INCREMENT':
+          // Immer allows us to "mutate" the draft directly
+          draft.value += 1;
+          break;
+        case 'DECREMENT':
+          draft.value -= 1;
+          break;
+        case 'SET':
+          draft.value = event.value;
+          break;
+        default:
+          console.log(`Unhandled counter event: ${(event as any).type}`);
+          break;
+      }
+    }
+    // Add other store producers as needed for handling their events
   }
 });
 
@@ -162,7 +185,45 @@ function App() {
     </View>
   );
 }
+
+### Understanding Producers
+
+Producers are functions that handle events dispatched from the web side. They use an Immer-style approach to update state:
+
+```typescript
+// Producer function for a counter store
+counter: (draft, event) => {
+  // The 'draft' is an Immer draft of the current state
+  // You can modify it directly as if it was mutable
+  // The 'event' is the event dispatched from the web
+  
+  switch (event.type) {
+    case 'INCREMENT':
+      draft.value += 1;
+      break;
+    case 'DECREMENT':
+      draft.value -= 1;
+      break;
+    case 'SET':
+      // TypeScript ensures type safety - value is already correctly typed
+      draft.value = event.value;
+      break;
+  }
+}
 ```
+
+Benefits of producers:
+- **Type Safety**: Producers receive correctly typed state and events
+- **Immutability**: Uses Immer under the hood, allowing "mutating" updates while preserving immutability
+- **Centralized Logic**: All event handling for a store in one place
+- **Easy State Updates**: Simple, intuitive way to update state in response to events
+
+When the web side dispatches an event like `counterStore.dispatch({ type: 'INCREMENT' })`, the native bridge:
+1. Receives the event
+2. Finds the producer for the target store
+3. Calls the producer with the store's state draft and the event
+4. Updates the store with the resulting state
+5. Broadcasts the state changes back to the web side
 
 ### Web Side (Direct Usage)
 
