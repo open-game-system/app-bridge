@@ -57,14 +57,32 @@ export function Counter() {
           </BridgeContext.Supported>
         </>
       ) : (
-        <div style={{ padding: '10px', background: '#ffeeee', borderRadius: '4px', marginTop: '20px' }}>
+        <div style={{ 
+          padding: '10px', 
+          background: '#ffeeee', 
+          border: '1px solid #ffaaaa',
+          borderRadius: '4px', 
+          marginTop: '20px',
+          color: '#cc0000' 
+        }}>
           <h3>Browser Mode</h3>
           <p>This app is designed to run inside the OpenGame App WebView.</p>
           <p>When viewed directly in a browser, the bridge is not available and features are limited.</p>
         </div>
       )}
       <BridgeContext.Unsupported>
-        <div>Bridge reports as unsupported</div>
+        <div style={{
+          background: '#ffdddd',
+          border: '1px solid #ff6666',
+          borderRadius: '4px',
+          padding: '8px',
+          margin: '10px 0',
+          color: '#cc0000',
+          fontWeight: 'bold',
+          textAlign: 'center'
+        }}>
+          Bridge reports as unsupported
+        </div>
       </BridgeContext.Unsupported>
     </div>
   );

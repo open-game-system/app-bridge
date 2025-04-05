@@ -24,6 +24,7 @@ type AppStores = {
 const App = () => {
   const webViewRef = useRef<WebView>(null);
   const [counterValue, setCounterValue] = useState(0);
+  const [webViewReady, setWebViewReady] = useState(false);
 
   // Create the bridge for communication between native and web
   const bridge = React.useMemo(
@@ -42,6 +43,7 @@ const App = () => {
     
     // Subscribe to counter changes
     const unsubscribe = counterStore?.subscribe((state) => {
+      console.log("Counter store updated:", state);
       setCounterValue(state.value);
     });
     
@@ -51,17 +53,35 @@ const App = () => {
     };
   }, [bridge]);
 
-  // Register WebView with the bridge to enable sending messages TO the WebView
+  // Register WebView with the bridge only after it's ready
   useEffect(() => {
-    if (webViewRef.current) {
-      console.log("Registering WebView with bridge");
+    if (webViewRef.current && webViewReady) {
+      console.log("WebView is ready, registering with bridge");
+      // Register the WebView with the bridge
       const unregisterWebView = bridge.registerWebView(webViewRef.current);
+      
+      // Force update all stores to ensure WebView gets initial state
+      // Use the store keys we know exist in our AppStores type
+      const storeKeys: (keyof AppStores)[] = ['counter'];
+      storeKeys.forEach(storeKey => {
+        const store = bridge.getStore(storeKey);
+        if (store) {
+          console.log(`Forcing update for store: ${storeKey}`);
+          // Use produce with identity function to trigger an update
+          // without changing the state
+          bridge.produce(storeKey, draft => {
+            // This is an identity function that doesn't change state
+            // but will trigger the store to send its state to WebView
+          });
+        }
+      });
+      
       return () => {
         console.log("Unregistering WebView from bridge");
         unregisterWebView();
       };
     }
-  }, [bridge, webViewRef.current]);
+  }, [bridge, webViewRef.current, webViewReady]);
 
   // Actions to modify the counter
   const incrementCounter = () =>
@@ -96,6 +116,10 @@ const App = () => {
             bridge.setState('counter', { value: event.value });
           }
         }
+      } else if (data.type === 'WEBVIEW_READY') {
+        // WebView is now ready to receive messages
+        console.log("Received WEBVIEW_READY message");
+        setWebViewReady(true);
       }
     } catch (e) {
       console.warn('Error parsing WebView message:', event.nativeEvent.data, e);
@@ -107,6 +131,39 @@ const App = () => {
     ios: { uri: "http://localhost:5173/" },
     android: { uri: "http://10.0.2.2:5173/" },
   });
+
+  // Inject JavaScript to notify when the WebView is fully loaded
+  const injectedJavaScript = `
+    // Send a message to notify that the WebView is ready
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'WEBVIEW_READY' }));
+
+      // Make it more visible when bridge is active
+      const addStatusBar = () => {
+        const statusBar = document.createElement('div');
+        statusBar.id = 'webview-status-bar';
+        statusBar.style.position = 'fixed';
+        statusBar.style.top = '0';
+        statusBar.style.left = '0';
+        statusBar.style.right = '0';
+        statusBar.style.padding = '4px';
+        statusBar.style.background = 'green';
+        statusBar.style.color = 'white';
+        statusBar.style.textAlign = 'center';
+        statusBar.style.zIndex = '9999';
+        statusBar.innerText = 'Bridge Status: Detected (Running in WebView)';
+        document.body.prepend(statusBar);
+      };
+
+      // Wait for DOM to be fully loaded
+      if (document.readyState === 'complete') {
+        addStatusBar();
+      } else {
+        window.addEventListener('load', addStatusBar);
+      }
+    }
+    true;
+  `;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -134,6 +191,7 @@ const App = () => {
           source={webviewSource} 
           style={styles.webview}
           onMessage={handleWebViewMessage}
+          injectedJavaScript={injectedJavaScript}
         />
       </View>
       <StatusBar style="auto" />
