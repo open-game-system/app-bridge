@@ -127,8 +127,9 @@ export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStor
   /**
    * Register a WebView to receive state updates
    * Sets up message handling and injects necessary JavaScript
+   * Returns an unsubscribe function
    */
-  registerWebView: (webView: WebView) => void;
+  registerWebView: (webView: WebView) => () => void;
 
   /**
    * Unregister a WebView from receiving state updates
@@ -321,7 +322,13 @@ Creates a native bridge instance for use in React Native applications:
 ```typescript
 function createNativeBridge<TStores extends BridgeStores>(
   config: {
-    initialState?: { [K in keyof TStores]: TStores[K]['state'] | null };
+    initialState?: { [K in keyof TStores]?: TStores[K]['state'] };
+    producers?: {
+      [K in keyof TStores]?: (
+        draft: TStores[K]['state'],
+        event: TStores[K]['events']
+      ) => void;
+    };
   } = {}
 ): NativeBridge<TStores>
 
@@ -329,6 +336,15 @@ function createNativeBridge<TStores extends BridgeStores>(
 const bridge = createNativeBridge<AppStores>({
   initialState: {
     counter: { value: 0 }
+  },
+  producers: {
+    counter: (draft, event) => {
+      switch (event.type) {
+        case 'INCREMENT':
+          draft.value += 1;
+          break;
+      }
+    }
   }
 });
 
@@ -339,8 +355,8 @@ if (counterStore) {
   const currentState = counterStore.getSnapshot();
   console.log('Current counter value:', currentState.value);
   
-  // Update state using the store's methods
-  counterStore.produce(draft => {
+  // Update state using the bridge's produce method
+  bridge.produce('counter', draft => {
     draft.value += 1;
   });
 }
@@ -363,7 +379,9 @@ function createMockBridge<TStores extends BridgeStores>(
      * Initial state for stores in the bridge
      * When provided, stores will be pre-initialized with these values
      */
-    initialState?: Record<keyof TStores, TStores[keyof TStores]["state"]>;
+    initialState?: Partial<{
+      [K in keyof TStores]: TStores[K]["state"];
+    }>;
   }
 ): MockBridge<TStores>
 
@@ -404,13 +422,14 @@ function GameWebView() {
   const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
+    if (!webViewRef.current) return;
+    
     // Register the WebView with the bridge
-    bridge.registerWebView(webViewRef.current);
+    // Store the unsubscribe function
+    const unsubscribe = bridge.registerWebView(webViewRef.current);
     
     // Cleanup on unmount
-    return () => {
-      bridge.unregisterWebView(webViewRef.current);
-    };
+    return unsubscribe;
   }, []);
 
   return (
@@ -425,14 +444,13 @@ function GameWebView() {
 #### Communication Flow
 
 1. **Native to Web Communication**:
-   - When the native state changes, the bridge uses `injectJavaScript` to send state updates to the WebView
-   - The injected JavaScript dispatches a `MessageEvent` with the state update
-   - The web bridge listens for these events and updates its local state
+   - When the native state changes, the bridge uses `postMessage` to send state updates to the WebView
+   - The web bridge listens for these messages and updates its local state
 
 2. **Web to Native Communication**:
    - When the web side dispatches an event, it uses `postMessage` to send the event to the native side
    - The WebView's `onMessage` handler receives the event and passes it to the bridge
-   - The bridge processes the event and updates the native state
+   - The bridge processes the event through the store's producer function and updates the native state
 
 #### Message Format
 
@@ -500,13 +518,18 @@ const BridgeContext = createBridgeContext<AppStores>();
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
-      <CounterContext.Provider>
-        <p>Bridge is supported in this environment!</p>
-        <GameComponent />
-      </CounterContext.Provider>
-      <CounterContext.Loading>
-        <p>Loading...</p>
-      </CounterContext.Loading>
+      <BridgeContext.Supported>
+        <CounterContext.Provider>
+          <p>Bridge is supported in this environment!</p>
+          <GameComponent />
+        </CounterContext.Provider>
+        <CounterContext.Loading>
+          <p>Loading...</p>
+        </CounterContext.Loading>
+      </BridgeContext.Supported>
+      <BridgeContext.Unsupported>
+        <p>This app must be run inside the native app.</p>
+      </BridgeContext.Unsupported>
     </BridgeContext.Provider>
   );
 }
@@ -520,13 +543,17 @@ Conditional render components that only render their children when the bridge is
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
-      <CounterContext.Provider>
-        <p>Bridge is supported in this environment!</p>
-        <GameComponent />
-      </CounterContext.Provider>
-      <CounterContext.Loading>
-        <p>Loading...</p>
-      </CounterContext.Loading>
+      <BridgeContext.Supported>
+        {/* Only rendered when bridge is supported */}
+        <CounterContext.Provider>
+          <GameComponent />
+        </CounterContext.Provider>
+      </BridgeContext.Supported>
+      
+      <BridgeContext.Unsupported>
+        {/* Only rendered when bridge is NOT supported */}
+        <p>This app must be run inside the native app.</p>
+      </BridgeContext.Unsupported>
     </BridgeContext.Provider>
   );
 }
@@ -563,12 +590,10 @@ function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
       <CounterContext.Provider>
-        <p>Bridge is supported in this environment!</p>
-        <GameComponent />
+        {/* Only rendered when counter store is available */}
+        <p>Counter is available!</p>
+        <Counter />
       </CounterContext.Provider>
-      <CounterContext.Loading>
-        <p>Loading...</p>
-      </CounterContext.Loading>
     </BridgeContext.Provider>
   );
 }
@@ -582,12 +607,9 @@ Component that renders its children only when the bridge is supported but the st
 function App() {
   return (
     <BridgeContext.Provider bridge={bridge}>
-      <CounterContext.Provider>
-        <p>Bridge is supported in this environment!</p>
-        <GameComponent />
-      </CounterContext.Provider>
       <CounterContext.Loading>
-        <p>Loading...</p>
+        {/* Only rendered when bridge is supported but counter store is NOT available */}
+        <p>Loading counter data...</p>
       </CounterContext.Loading>
     </BridgeContext.Provider>
   );
@@ -621,8 +643,8 @@ Hook to select and subscribe to a specific piece of data from the store:
 
 ```typescript
 function Counter() {
-  const store = CounterContext.useStore();
   const count = CounterContext.useSelector(state => state.value);
+  const store = CounterContext.useStore();
   
   return (
     <button onClick={() => store.dispatch({ type: 'INCREMENT' })}>
@@ -636,7 +658,7 @@ function Counter() {
 
 ```tsx
 // shared/types.ts
-import { BridgeStoreDefinitions, State, Event } from '@open-game-system/app-bridge';
+import type { BridgeStores, State, Event } from '@open-game-system/app-bridge';
 
 export interface CounterState extends State {
   value: number;
@@ -647,12 +669,12 @@ export type CounterEvent =
   | { type: 'DECREMENT' }
   | { type: 'SET'; value: number };
 
-export interface AppStores extends BridgeStoreDefinitions {
+export type AppStores = {
   counter: {
     state: CounterState;
     events: CounterEvent;
   };
-}
+};
 
 // App.tsx
 import { createBridgeContext, createWebBridge } from '@open-game-system/app-bridge';
@@ -748,10 +770,10 @@ test('Counter increments when clicked', () => {
   );
   
   // Initial state
-  expect(screen.getByText('Counter: 0')).toBeInTheDocument();
+  expect(screen.getByText('Count: 0')).toBeInTheDocument();
   
   // Click the increment button
-  fireEvent.click(screen.getByText('+'));
+  fireEvent.click(screen.getByRole('button', { name: 'Increment' }));
   
   // Check that the event was dispatched
   const counterStore = mockBridge.getStore('counter');
@@ -765,7 +787,7 @@ test('Counter increments when clicked', () => {
   }
   
   // Check that the UI updated
-  expect(screen.getByText('Counter: 1')).toBeInTheDocument();
+  expect(screen.getByText('Count: 1')).toBeInTheDocument();
 });
 ```
 
@@ -775,21 +797,21 @@ test('Counter increments when clicked', () => {
 
 The mock bridge provides several testing-specific features:
 
-1. **Automatic Event Handling**:
-   - Automatically handles common event types (INCREMENT, DECREMENT, SET)
-   - Simulates state updates based on dispatched events
+1. **Event History Tracking**:
+   - Records all dispatched events for later inspection
+   - Allows verification of event payloads
 
 2. **State Management**:
    - Maintains initial state for reset functionality
-   - Supports testing state updates and subscriptions
+   - Supports direct state manipulation with `produce` and `setState`
 
 3. **Support Testing**:
    - Allows testing bridge support states through `isSupported` configuration
-   - Simulates WebView communication for testing
+   - Enables testing of both supported and unsupported UI states
 
 4. **Reset Functionality**:
    - Supports resetting individual stores or all stores
-   - Maintains initial state for accurate testing
+   - Clears event history when resetting
 
 Example usage:
 
