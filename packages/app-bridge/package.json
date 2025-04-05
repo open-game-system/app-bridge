@@ -1,6 +1,6 @@
 {
   "name": "@open-game-system/app-bridge",
-  "version": "0.1.2025040-5.1",
+  "version": "0.20250405.1",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
