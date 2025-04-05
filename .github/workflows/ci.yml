@@ -200,14 +200,14 @@ jobs:
         # Package name from package.json
         PACKAGE_NAME=$(node -p "require('./packages/app-bridge/package.json').name")
         
-        # Extract base version (e.g., "0.1") from package.json
-        BASE_VERSION=$(node -p "require('./packages/app-bridge/package.json').version.split('.').slice(0, 2).join('.')")
+        # Extract major version (e.g., "0" or "4")
+        MAJOR_VERSION=$(node -p "require('./packages/app-bridge/package.json').version.split('.')[0]")
         
         # Generate date in format YYYYMMDD
         DATE=$(date +'%Y%m%d')
         
         # Check if there are any published versions with this date prefix
-        echo "Checking for existing versions with prefix ${BASE_VERSION}.${DATE}..."
+        echo "Checking for existing versions with prefix ${MAJOR_VERSION}.${DATE}..."
         
         # Get the latest published version with npm view
         # Use || echo "[]" to handle case when package doesn't exist yet
@@ -220,7 +220,7 @@ jobs:
         # Only try to parse if the response isn't an error and isn't empty
         if [[ "$LATEST_PUBLISHED" != "[]" && "$LATEST_PUBLISHED" != "" && "$LATEST_PUBLISHED" != *"error"* ]]; then
           # Parse versions and find the highest patch for today
-          PATTERN="${BASE_VERSION}.${DATE}."
+          PATTERN="${MAJOR_VERSION}.${DATE}."
           HIGHEST_PATCH=$(echo $LATEST_PUBLISHED | \
             node -e "
               try {
@@ -257,8 +257,8 @@ jobs:
         # Increment the patch version
         PATCH_VERSION=$((HIGHEST_PATCH + 1))
         
-        # Combine to form date-based version: X.YYYYMMDD.Z
-        NEW_VERSION="${BASE_VERSION}.${DATE}.${PATCH_VERSION}"
+        # Combine to form CloudFlare-style version: MAJOR.YYYYMMDD.PATCH
+        NEW_VERSION="${MAJOR_VERSION}.${DATE}.${PATCH_VERSION}"
         
         echo "Generated new version: $NEW_VERSION"
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
