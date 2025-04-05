@@ -164,6 +164,96 @@ export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStor
 }
 ```
 
+### Creating a Native Bridge with Producers
+
+The native bridge can be configured with store-specific producer functions that handle events from the web side. These producers are required to handle any events dispatched from the web side:
+
+```typescript
+function createNativeBridge<TStores extends BridgeStores>(
+  config: {
+    /**
+     * Initial state for stores in the bridge
+     */
+    initialState?: { [K in keyof TStores]?: TStores[K]['state'] };
+    
+    /**
+     * Producer functions that handle events for specific stores
+     * Each key in this object corresponds to a store key in TStores
+     * Producers use Immer's draft state for easy state updates
+     * 
+     * Note: Without a producer for a store, events for that store will be logged but not processed
+     */
+    producers?: {
+      [K in keyof TStores]?: (
+        draft: TStores[K]['state'],
+        event: TStores[K]['events']
+      ) => void;
+    };
+  } = {}
+): NativeBridge<TStores>
+```
+
+### Example: Handling Events with Producers
+
+Each store's producer function receives the current draft state and an event, allowing you to update the state using Immer's API:
+
+```typescript
+const bridge = createNativeBridge<AppStores>({
+  initialState: {
+    counter: { value: 0 },
+    user: { name: '', loggedIn: false }
+  },
+  producers: {
+    // Counter store producer
+    counter: (draft, event) => {
+      // Handle counter events with a switch statement
+      switch (event.type) {
+        case 'INCREMENT':
+          // Directly "mutate" the draft (Immer handles immutability)
+          draft.value += 1;
+          break;
+          
+        case 'DECREMENT':
+          draft.value -= 1;
+          break;
+          
+        case 'SET':
+          if ('value' in event && typeof event.value === 'number') {
+            draft.value = event.value;
+          }
+          break;
+      }
+    },
+    
+    // User store producer
+    user: (draft, event) => {
+      switch (event.type) {
+        case 'LOGIN':
+          draft.loggedIn = true;
+          if ('username' in event) {
+            draft.name = event.username;
+          }
+          break;
+          
+        case 'LOGOUT':
+          draft.loggedIn = false;
+          break;
+      }
+    }
+  }
+});
+```
+
+The `producers` configuration provides several advantages:
+1. Type-safe handling of events for each store separately
+2. Store-specific logic organized by store key
+3. Uses Immer drafts for intuitive state manipulation
+4. Makes the code more readable with explicit handling for each store's events
+
+### Behavior without Producers
+
+If an event is received for a store that doesn't have a producer defined, the event will be logged to the console and store listeners will be notified, but no state change will occur. It's recommended to always define producers for stores that receive events from the web.
+
 ### Mock Bridge Interface
 
 The mock bridge extends the base bridge with testing-specific functionality:

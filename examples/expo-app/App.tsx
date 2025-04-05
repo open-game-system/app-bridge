@@ -33,6 +33,32 @@ const App = () => {
         initialState: {
           counter: { value: 0 },
         },
+        // Define producers for each store to handle events
+        producers: {
+          // Counter store producer - required to handle events from the web
+          counter: (draft, event) => {
+            // Use a switch statement to handle different event types
+            switch (event.type) {
+              case 'INCREMENT':
+                // Immer allows us to "mutate" the draft directly
+                draft.value += 1;
+                break;
+                
+              case 'DECREMENT':
+                draft.value -= 1;
+                break;
+                
+              case 'SET':
+                draft.value = event.value;
+                break;
+                
+              default:
+                console.log(`Unhandled counter event: ${(event as any).type}`);
+                break;
+            }
+          }
+          // Add other store producers as needed for handling their events
+        }
       }),
     []
   );

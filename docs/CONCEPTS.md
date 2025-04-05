@@ -86,7 +86,7 @@ The integration works in three steps:
 1. **WebView Registration**
    - Native app registers the WebView with the bridge
    - Bridge injects necessary JavaScript into the WebView
-   - Bridge sets up message handlers
+   | Bridge sets up message handlers
 
 2. **Message Passing**
    - Web side sends events via `postMessage`
@@ -181,6 +181,78 @@ State updates can happen in two ways:
      }
    });
    ```
+
+## Event Producers
+
+Events sent from the web side to the native side are handled by producer functions. These producers are defined when creating the native bridge and are responsible for updating the state in response to events.
+
+### Producer Definition
+
+Producers are defined as an object with keys that match your store keys:
+
+```typescript
+const bridge = createNativeBridge<AppStores>({
+  initialState: {
+    counter: { value: 0 },
+    user: { name: '', loggedIn: false }
+  },
+  producers: {
+    // Counter store producer
+    counter: (draft, event) => {
+      // Handle counter events
+      switch (event.type) {
+        case 'INCREMENT':
+          draft.value += 1;
+          break;
+          
+        case 'DECREMENT':
+          draft.value -= 1;
+          break;
+      }
+    },
+    
+    // User store producer
+    user: (draft, event) => {
+      // Handle user events
+      switch (event.type) {
+        case 'LOGIN':
+          draft.loggedIn = true;
+          break;
+          
+        case 'LOGOUT':
+          draft.loggedIn = false;
+          break;
+      }
+    }
+  }
+});
+```
+
+### Producer Usage
+
+When the web side dispatches an event, the bridge:
+1. Identifies which store the event is for
+2. Finds the producer for that store
+3. If a producer exists, calls it with a draft state and the event
+4. If no producer exists, logs the event and notifies listeners (without state change)
+
+```mermaid
+flowchart TD
+    WebView[WebView] -->|dispatch event| Bridge[Native Bridge]
+    Bridge -->|find producer| Producer{Producer exists?}
+    Producer -->|Yes| UpdateState[Update state with producer]
+    Producer -->|No| LogEvent[Log event and notify listeners]
+    UpdateState --> NotifyListeners[Notify listeners]
+    LogEvent --> End[End]
+    NotifyListeners --> End
+```
+
+### Benefits of Producers
+
+1. **Type Safety**: Each producer receives correctly typed state and events for its store
+2. **Separation of Concerns**: Each store has its own producer function
+3. **Immer Integration**: Use Immer's draft objects for intuitive state updates
+4. **Event Handling**: Centralized, clean switch statements for handling different event types
 
 ## React Integration
 
