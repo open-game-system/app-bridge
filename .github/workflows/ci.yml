@@ -113,7 +113,7 @@ jobs:
         # Only try to parse if the response isn't an error and isn't empty
         if [[ "$LATEST_PUBLISHED" != "[]" && "$LATEST_PUBLISHED" != "" && "$LATEST_PUBLISHED" != *"error"* ]]; then
           # Parse versions and find the highest build for this PR
-          PATTERN="${MAJOR_VERSION}.${DATE}.pr${PR_NUMBER}."
+          PATTERN="${MAJOR_VERSION}.${DATE}.pr${PR_NUMBER}-"
           HIGHEST_BUILD=$(echo $LATEST_PUBLISHED | \
             node -e "
               try {
@@ -150,8 +150,8 @@ jobs:
         # Increment the build number
         BUILD_NUMBER=$((HIGHEST_BUILD + 1))
         
-        # Create a version format with PR and build number: MAJOR.YYYYMMDD.prXX.N
-        DEV_VERSION="${MAJOR_VERSION}.${DATE}.pr${PR_NUMBER}.${BUILD_NUMBER}"
+        # Create a version format with PR and build number: MAJOR.YYYYMMDD.prXX-N
+        DEV_VERSION="${MAJOR_VERSION}.${DATE}.pr${PR_NUMBER}-${BUILD_NUMBER}"
         
         echo "Generated dev version: $DEV_VERSION"
         echo "DEV_VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
