@@ -87,8 +87,8 @@ jobs:
         # Package name from package.json
         PACKAGE_NAME=$(node -p "require('./packages/app-bridge/package.json').name")
         
-        # Extract current version from package.json
-        CURRENT_VERSION=$(node -p "require('./packages/app-bridge/package.json').version")
+        # Extract major version (e.g., "0" or "4")
+        MAJOR_VERSION=$(node -p "require('./packages/app-bridge/package.json').version.split('.')[0]")
         
         # Generate date in format YYYYMMDD
         DATE=$(date +'%Y%m%d')
@@ -96,12 +96,12 @@ jobs:
         # Get PR number
         PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
-        # Generate a unique dev identifier using the PR number and short commit hash
-        SHORT_SHA=$(git rev-parse --short HEAD)
-        DEV_ID="pr${PR_NUMBER}.${SHORT_SHA}"
+        # Get current run number for a unique build number
+        BUILD_NUMBER=${{ github.run_number }}
         
-        # Create a dev version with format: X.Y.Z-dev.YYYYMMDD.prN.HASH
-        DEV_VERSION="${CURRENT_VERSION}-dev.${DATE}.${DEV_ID}"
+        # Create a version with format: MAJOR.DATE.0-prN.BUILD
+        # This maintains similar format to production versions but adds PR info
+        DEV_VERSION="${MAJOR_VERSION}.${DATE}.0-pr${PR_NUMBER}.${BUILD_NUMBER}"
         
         echo "Generated dev version: $DEV_VERSION"
         echo "DEV_VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
@@ -120,6 +120,14 @@ jobs:
           pkg.publishConfig.access = 'public';
           fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
         "
+    
+    - name: Copy README and LICENSE
+      run: |
+        cp README.md packages/app-bridge/
+        cp LICENSE packages/app-bridge/ 2>/dev/null || :
+        # Copy docs folder
+        mkdir -p packages/app-bridge/docs
+        cp -R docs/* packages/app-bridge/docs/ 2>/dev/null || :
     
     - name: Publish package to GitHub Packages
       env:
@@ -267,6 +275,14 @@ jobs:
       run: |
         cd packages/app-bridge
         npm version ${{ steps.version.outputs.NEW_VERSION }} --no-git-tag-version
+    
+    - name: Copy README and LICENSE
+      run: |
+        cp README.md packages/app-bridge/
+        cp LICENSE packages/app-bridge/ 2>/dev/null || :
+        # Copy docs folder
+        mkdir -p packages/app-bridge/docs
+        cp -R docs/* packages/app-bridge/docs/ 2>/dev/null || :
     
     - name: Publish package to npm
       env:
