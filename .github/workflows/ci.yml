@@ -183,10 +183,16 @@ jobs:
         version: 8
     
     - name: Install dependencies
-      run: pnpm install
+      run: |
+        # Install only the main package dependencies to avoid issues with example apps
+        cd packages/app-bridge
+        pnpm install
     
-    - name: Build packages
-      run: pnpm run build
+    - name: Build package
+      run: |
+        # Build only the main package, not the examples
+        cd packages/app-bridge
+        pnpm run build
     
     - name: Generate date-based version
       id: version
