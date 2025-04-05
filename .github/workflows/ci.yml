@@ -210,31 +210,49 @@ jobs:
         echo "Checking for existing versions with prefix ${BASE_VERSION}.${DATE}..."
         
         # Get the latest published version with npm view
+        # Use || echo "[]" to handle case when package doesn't exist yet
+        # Also handle the case where npm returns an error object by checking for error
         LATEST_PUBLISHED=$(npm view ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
         
         # Find the highest patch number for today's date
         HIGHEST_PATCH=0
         
-        if [ "$LATEST_PUBLISHED" != "[]" ] && [ "$LATEST_PUBLISHED" != "" ]; then
+        # Only try to parse if the response isn't an error and isn't empty
+        if [[ "$LATEST_PUBLISHED" != "[]" && "$LATEST_PUBLISHED" != "" && "$LATEST_PUBLISHED" != *"error"* ]]; then
           # Parse versions and find the highest patch for today
           PATTERN="${BASE_VERSION}.${DATE}."
           HIGHEST_PATCH=$(echo $LATEST_PUBLISHED | \
             node -e "
-              const versions = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
-              const pattern = process.argv[1];
-              const todayVersions = Array.isArray(versions) ? 
-                versions.filter(v => v.startsWith(pattern)) : 
-                Object.keys(versions).filter(v => v.startsWith(pattern));
-              
-              if (todayVersions.length > 0) {
-                const patches = todayVersions.map(v => parseInt(v.substring(pattern.length), 10))
-                                          .filter(n => !isNaN(n));
-                console.log(Math.max(...patches, 0));
-              } else {
-                console.log(0);
+              try {
+                const data = require('fs').readFileSync(0, 'utf-8');
+                let versions = [];
+                try {
+                  versions = JSON.parse(data);
+                } catch (e) {
+                  console.error('Failed to parse JSON:', e);
+                  process.exit(0); // Exit gracefully with 0 patch version
+                }
+                
+                const pattern = process.argv[1];
+                const todayVersions = Array.isArray(versions) ? 
+                  versions.filter(v => v.startsWith(pattern)) : 
+                  Object.keys(versions).filter(v => v.startsWith(pattern));
+                
+                if (todayVersions.length > 0) {
+                  const patches = todayVersions.map(v => parseInt(v.substring(pattern.length), 10))
+                                            .filter(n => !isNaN(n));
+                  console.log(Math.max(...patches, 0));
+                } else {
+                  console.log(0);
+                }
+              } catch (e) {
+                console.error('Error in script:', e);
+                console.log(0); // Default to 0 if any error occurs
               }
-            " "$PATTERN")
+            " "$PATTERN" || echo "0")
         fi
+        
+        echo "Highest patch found: ${HIGHEST_PATCH}"
         
         # Increment the patch version
         PATCH_VERSION=$((HIGHEST_PATCH + 1))
