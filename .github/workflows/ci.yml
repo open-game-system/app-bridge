@@ -117,6 +117,7 @@ jobs:
           const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
           if (!pkg.publishConfig) pkg.publishConfig = {};
           pkg.publishConfig.registry = 'https://npm.pkg.github.com/';
+          pkg.publishConfig.access = 'public';
           fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
         "
     
@@ -125,7 +126,7 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd packages/app-bridge
-        npm publish --tag dev
+        npm publish --tag dev --access public
         
     - name: Comment on PR with published version
       uses: actions/github-script@v6
