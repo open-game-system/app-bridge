@@ -99,10 +99,9 @@ jobs:
         # Get current run number for a unique build number
         BUILD_NUMBER=${{ github.run_number }}
         
-        # Create a version with format: MAJOR.0.0-YYYYMMDD.prN.BUILD
-        # - Using 0.0 for minor and patch to ensure semver compliance
-        # - Using prerelease format with date, PR number and build number
-        DEV_VERSION="${MAJOR_VERSION}.0.0-${DATE}.pr${PR_NUMBER}.${BUILD_NUMBER}"
+        # Create a version with format: MAJOR.DATE.0-prN.BUILD
+        # This maintains similar format to production versions but adds PR info
+        DEV_VERSION="${MAJOR_VERSION}.${DATE}.0-pr${PR_NUMBER}.${BUILD_NUMBER}"
         
         echo "Generated dev version: $DEV_VERSION"
         echo "DEV_VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
