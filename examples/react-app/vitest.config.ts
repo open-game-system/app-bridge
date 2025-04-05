@@ -22,5 +22,8 @@ export default defineConfig({
         'src/test/',
       ],
     },
+    deps: {
+      inline: ['@testing-library/jest-dom'],
+    }
   },
 }); 

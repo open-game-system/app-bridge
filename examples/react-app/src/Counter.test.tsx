@@ -2,13 +2,26 @@ import type { MockBridge } from "@open-game-system/app-bridge";
 import { createMockBridge } from "@open-game-system/app-bridge";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react-dom/test-utils";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi, beforeAll, afterAll } from "vitest";
 import { Counter } from "./Counter";
 import type { AppStores } from "./types";
 import { BridgeContext } from "./bridge";
 
 describe("Counter", () => {
   let mockBridge: MockBridge<AppStores>;
+  
+  // Mock ReactNativeWebView on window object
+  beforeAll(() => {
+    // @ts-ignore - Mock the ReactNativeWebView object on window
+    window.ReactNativeWebView = {
+      postMessage: vi.fn()
+    };
+  });
+
+  afterAll(() => {
+    // @ts-ignore - Clean up mock after tests
+    delete window.ReactNativeWebView;
+  });
 
   beforeEach(() => {
     // Create a fresh mock bridge before each test
@@ -20,13 +33,24 @@ describe("Counter", () => {
     });
   });
 
-  it("renders initial counter value", () => {
+  it("renders initial counter value", async () => {
     render(
       <BridgeContext.Provider bridge={mockBridge}>
         <Counter />
       </BridgeContext.Provider>
     );
-    expect(screen.getByText(/Counter: 0/)).toBeInTheDocument();
+    
+    // Wait for the component to detect bridge support
+    await act(async () => {
+      // Mock a state update message to trigger the bridge supported state
+      const messageEvent = new MessageEvent('message', {
+        data: JSON.stringify({ type: 'STATE_UPDATE', storeKey: 'counter', data: { value: 0 } })
+      });
+      window.dispatchEvent(messageEvent);
+    });
+    
+    expect(screen.getByText(/Web Bridge Counter:/)).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
   });
 
   it("increments counter when + button is clicked", async () => {
@@ -36,8 +60,18 @@ describe("Counter", () => {
       </BridgeContext.Provider>
     );
 
+    // Wait for the component to detect bridge support
+    await act(async () => {
+      // Mock a state update message to trigger the bridge supported state
+      const messageEvent = new MessageEvent('message', {
+        data: JSON.stringify({ type: 'STATE_UPDATE', storeKey: 'counter', data: { value: 0 } })
+      });
+      window.dispatchEvent(messageEvent);
+    });
+
     // Click the increment button
-    fireEvent.click(screen.getByText("+"));
+    const plusButton = screen.getByText("+");
+    fireEvent.click(plusButton);
 
     // Check that the event was dispatched
     expect(mockBridge.getHistory("counter")).toContainEqual({
@@ -55,7 +89,7 @@ describe("Counter", () => {
     });
 
     // Verify UI updated
-    expect(screen.getByText(/Counter: 1/)).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
   });
 
   it("decrements counter when - button is clicked", async () => {
@@ -65,8 +99,18 @@ describe("Counter", () => {
       </BridgeContext.Provider>
     );
 
+    // Wait for the component to detect bridge support
+    await act(async () => {
+      // Mock a state update message to trigger the bridge supported state
+      const messageEvent = new MessageEvent('message', {
+        data: JSON.stringify({ type: 'STATE_UPDATE', storeKey: 'counter', data: { value: 0 } })
+      });
+      window.dispatchEvent(messageEvent);
+    });
+
     // Click the decrement button
-    fireEvent.click(screen.getByText("-"));
+    const minusButton = screen.getByText("-");
+    fireEvent.click(minusButton);
 
     // Check that the event was dispatched
     expect(mockBridge.getHistory("counter")).toContainEqual({
@@ -84,7 +128,7 @@ describe("Counter", () => {
     });
 
     // Verify UI updated
-    expect(screen.getByText(/Counter: -1/)).toBeInTheDocument();
+    expect(screen.getByText("-1")).toBeInTheDocument();
   });
 
   it("sets counter value when set button is clicked", async () => {
@@ -94,12 +138,25 @@ describe("Counter", () => {
       </BridgeContext.Provider>
     );
 
+    // Wait for the component to detect bridge support
+    await act(async () => {
+      // Mock a state update message to trigger the bridge supported state
+      const messageEvent = new MessageEvent('message', {
+        data: JSON.stringify({ type: 'STATE_UPDATE', storeKey: 'counter', data: { value: 0 } })
+      });
+      window.dispatchEvent(messageEvent);
+    });
+
+    // Find the input field and Set button
+    const inputs = screen.getAllByRole("spinbutton");
+    const input = inputs.find(el => el.closest('div')?.textContent?.includes('Set'));
+    const setButton = screen.getByRole("button", { name: "Set" });
+    
     // Set a new value in the input
-    const input = screen.getByRole("spinbutton");
-    fireEvent.change(input, { target: { value: "42" } });
+    fireEvent.change(input!, { target: { value: "42" } });
 
     // Click the set button
-    fireEvent.click(screen.getByText("Set"));
+    fireEvent.click(setButton);
 
     // Check that the event was dispatched
     expect(mockBridge.getHistory("counter")).toContainEqual({
@@ -118,7 +175,7 @@ describe("Counter", () => {
     });
 
     // Verify UI updated
-    expect(screen.getByText(/Counter: 42/)).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
   });
 
   it("shows loading state when store is not initialized", async () => {
@@ -133,8 +190,17 @@ describe("Counter", () => {
       </BridgeContext.Provider>
     );
 
+    // Wait for the component to detect bridge support
+    await act(async () => {
+      // Mock a state update message to trigger the bridge supported state
+      const messageEvent = new MessageEvent('message', {
+        data: JSON.stringify({ type: 'STATE_UPDATE' })
+      });
+      window.dispatchEvent(messageEvent);
+    });
+
     // Loading state should be shown
-    expect(screen.getByText("Waiting for counter data...")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for counter data from native app...")).toBeInTheDocument();
 
     // Initialize the store
     await act(async () => {
@@ -143,12 +209,17 @@ describe("Counter", () => {
 
     // Loading state should be gone, counter should be shown
     expect(
-      screen.queryByText("Waiting for counter data...")
+      screen.queryByText("Waiting for counter data from native app...")
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/Counter: 10/)).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
   });
 
-  it("shows unsupported message when bridge is not supported", () => {
+  it("shows unsupported message when bridge is not supported", async () => {
+    // Temporarily remove the ReactNativeWebView
+    const originalReactNativeWebView = window.ReactNativeWebView;
+    // @ts-ignore - Remove the mock
+    delete window.ReactNativeWebView;
+    
     // Create a mock bridge that is not supported
     const unsupportedBridge = createMockBridge<AppStores>({
       isSupported: false,
@@ -162,7 +233,11 @@ describe("Counter", () => {
 
     // Unsupported message should be shown
     expect(
-      screen.getByText("Bridge not supported in this environment")
+      screen.getByText("Bridge reports as unsupported")
     ).toBeInTheDocument();
+    
+    // Restore the ReactNativeWebView
+    // @ts-ignore - Restore the mock
+    window.ReactNativeWebView = originalReactNativeWebView;
   });
 });
