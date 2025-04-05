@@ -121,6 +121,8 @@ function BadCounter() {
 // 1. Import shared types
 import type { AppStores } from './shared/types';
 import { WebView } from 'react-native-webview';
+import { useRef, useCallback, useEffect, useState } from 'react';
+import { NativeSyntheticEvent } from 'react-native';
 
 // 2. Create the native bridge with initial state
 const bridge = createNativeBridge<AppStores>({
@@ -156,23 +158,36 @@ const bridge = createNativeBridge<AppStores>({
 function GameWebView() {
   const webViewRef = useRef<WebView>(null);
 
-  useEffect(() => {
-    const webView = webViewRef.current;
-    if (!webView) return;
+  // Handle messages FROM the WebView
+  const handleWebViewMessage = (event: NativeSyntheticEvent<{ data: string }>) => {
+    try {
+      // Attempt to parse the message and pass it to the bridge
+      const messageData = JSON.parse(event.nativeEvent.data);
+      bridge.handleWebMessage(messageData);
+    } catch (e) {
+      // Handle non-JSON messages or other errors if necessary
+      // console.warn("Error handling WebView message:", e);
+      // You might pass raw data if needed: bridge.handleWebMessage(event.nativeEvent.data);
+    }
+  };
 
-    // Register the WebView with the bridge
-    bridge.registerWebView(webView);
+  // Register the WebView with the bridge on component mount
+  useEffect(() => {
+    if (!webViewRef.current) return;
+
+    // Register the WebView and get the unregister function
+    const unregister = bridge.registerWebView(webViewRef.current);
     
     // Cleanup on unmount
-    return () => {
-      bridge.unregisterWebView(webView);
-    };
-  }, []);
+    return unregister;
+  }, []); // Empty dependency array runs only once on mount
 
   return (
     <WebView
       ref={webViewRef}
       source={{ uri: 'https://your-game-url.com' }}
+      onMessage={handleWebViewMessage}
+      // No injectedJavaScript needed for this simple example
     />
   );
 }
@@ -184,85 +199,6 @@ function App() {
       <GameWebView />
     </View>
   );
-}
-
-### Understanding Producers
-
-Producers are functions that handle events dispatched from the web side. They use an Immer-style approach to update state:
-
-```typescript
-// Producer function for a counter store
-counter: (draft, event) => {
-  // The 'draft' is an Immer draft of the current state
-  // You can modify it directly as if it was mutable
-  // The 'event' is the event dispatched from the web
-  
-  switch (event.type) {
-    case 'INCREMENT':
-      draft.value += 1;
-      break;
-    case 'DECREMENT':
-      draft.value -= 1;
-      break;
-    case 'SET':
-      // TypeScript ensures type safety - value is already correctly typed
-      draft.value = event.value;
-      break;
-  }
-}
-```
-
-Benefits of producers:
-- **Type Safety**: Producers receive correctly typed state and events
-- **Immutability**: Uses Immer under the hood, allowing "mutating" updates while preserving immutability
-- **Centralized Logic**: All event handling for a store in one place
-- **Easy State Updates**: Simple, intuitive way to update state in response to events
-
-When the web side dispatches an event like `counterStore.dispatch({ type: 'INCREMENT' })`, the native bridge:
-1. Receives the event
-2. Finds the producer for the target store
-3. Calls the producer with the store's state draft and the event
-4. Updates the store with the resulting state
-5. Broadcasts the state changes back to the web side
-
-### Web Side (Direct Usage)
-
-```typescript
-// 1. Import shared types
-import type { AppStores } from './shared/types';
-import { createWebBridge } from '@open-game-system/app-bridge';
-
-// 2. Create the web bridge
-const bridge = createWebBridge<AppStores>();
-
-// 3. Listen for store availability
-bridge.subscribe(() => {
-  console.log('Store availability changed');
-  
-  // Check for counter store
-  const counterStore = bridge.getStore('counter');
-  if (counterStore) {
-    console.log('Counter store is now available');
-    
-    // Subscribe to state changes
-    counterStore.subscribe(state => {
-      console.log('Counter state:', state);
-      updateUI(state);
-    });
-    
-    // Dispatch events
-    document.getElementById('increment')?.addEventListener('click', () => {
-      counterStore.dispatch({ type: 'INCREMENT' });
-    });
-  }
-});
-
-// 4. Helper function to update the UI
-function updateUI(state: { value: number }) {
-  const counterElement = document.getElementById('counter');
-  if (counterElement) {
-    counterElement.textContent = `Count: ${state.value}`;
-  }
 }
 ```
 
