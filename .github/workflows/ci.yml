@@ -43,3 +43,216 @@ jobs:
     - name: Run tests
       run: pnpm run test
       # This will also run typecheck via the turbo dependency chain 
+
+  publish-dev:
+    needs: test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write  # Permission needed to comment on PR
+      packages: write       # Permission needed to publish to GitHub Packages
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+        registry-url: 'https://npm.pkg.github.com'
+        scope: '@open-game-system'
+    
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Build packages
+      run: pnpm run build
+    
+    - name: Generate dev version
+      id: version
+      run: |
+        # Package name from package.json
+        PACKAGE_NAME=$(node -p "require('./packages/app-bridge/package.json').name")
+        
+        # Extract current version from package.json
+        CURRENT_VERSION=$(node -p "require('./packages/app-bridge/package.json').version")
+        
+        # Generate date in format YYYYMMDD
+        DATE=$(date +'%Y%m%d')
+        
+        # Get PR number
+        PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
+        
+        # Generate a unique dev identifier using the PR number and short commit hash
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        DEV_ID="pr${PR_NUMBER}.${SHORT_SHA}"
+        
+        # Create a dev version with format: X.Y.Z-dev.YYYYMMDD.prN.HASH
+        DEV_VERSION="${CURRENT_VERSION}-dev.${DATE}.${DEV_ID}"
+        
+        echo "Generated dev version: $DEV_VERSION"
+        echo "DEV_VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Update version in package.json
+      run: |
+        cd packages/app-bridge
+        npm version ${{ steps.version.outputs.DEV_VERSION }} --no-git-tag-version
+        
+        # Add GitHub registry to package.json for this version
+        node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+          if (!pkg.publishConfig) pkg.publishConfig = {};
+          pkg.publishConfig.registry = 'https://npm.pkg.github.com/';
+          fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+        "
+    
+    - name: Publish package to GitHub Packages
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        cd packages/app-bridge
+        npm publish --tag dev
+        
+    - name: Comment on PR with published version
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const prNumber = context.issue.number;
+          const version = '${{ steps.version.outputs.DEV_VERSION }}';
+          const packageName = require('./packages/app-bridge/package.json').name;
+          const repoName = context.repo.owner + '/' + context.repo.repo;
+          
+          github.rest.issues.createComment({
+            issue_number: prNumber,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `📦 Development version published to GitHub Packages: \`${packageName}@${version}\`
+          
+          You can install it with:
+          \`\`\`
+          # Add this to .npmrc
+          @open-game-system:registry=https://npm.pkg.github.com/${repoName}
+          
+          # Then install
+          npm install ${packageName}@${version}
+          # or
+          yarn add ${packageName}@${version}
+          # or
+          pnpm add ${packageName}@${version}
+          \`\`\``
+          });
+
+  publish:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # This permission is needed to push to the repository
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+        registry-url: 'https://registry.npmjs.org'
+    
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Build packages
+      run: pnpm run build
+    
+    - name: Generate date-based version
+      id: version
+      run: |
+        # Package name from package.json
+        PACKAGE_NAME=$(node -p "require('./packages/app-bridge/package.json').name")
+        
+        # Extract base version (e.g., "0.1") from package.json
+        BASE_VERSION=$(node -p "require('./packages/app-bridge/package.json').version.split('.').slice(0, 2).join('.')")
+        
+        # Generate date in format YYYYMMDD
+        DATE=$(date +'%Y%m%d')
+        
+        # Check if there are any published versions with this date prefix
+        echo "Checking for existing versions with prefix ${BASE_VERSION}.${DATE}..."
+        
+        # Get the latest published version with npm view
+        LATEST_PUBLISHED=$(npm view ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
+        
+        # Find the highest patch number for today's date
+        HIGHEST_PATCH=0
+        
+        if [ "$LATEST_PUBLISHED" != "[]" ] && [ "$LATEST_PUBLISHED" != "" ]; then
+          # Parse versions and find the highest patch for today
+          PATTERN="${BASE_VERSION}.${DATE}."
+          HIGHEST_PATCH=$(echo $LATEST_PUBLISHED | \
+            node -e "
+              const versions = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
+              const pattern = process.argv[1];
+              const todayVersions = Array.isArray(versions) ? 
+                versions.filter(v => v.startsWith(pattern)) : 
+                Object.keys(versions).filter(v => v.startsWith(pattern));
+              
+              if (todayVersions.length > 0) {
+                const patches = todayVersions.map(v => parseInt(v.substring(pattern.length), 10))
+                                          .filter(n => !isNaN(n));
+                console.log(Math.max(...patches, 0));
+              } else {
+                console.log(0);
+              }
+            " "$PATTERN")
+        fi
+        
+        # Increment the patch version
+        PATCH_VERSION=$((HIGHEST_PATCH + 1))
+        
+        # Combine to form date-based version: X.YYYYMMDD.Z
+        NEW_VERSION="${BASE_VERSION}.${DATE}.${PATCH_VERSION}"
+        
+        echo "Generated new version: $NEW_VERSION"
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Update version in package.json
+      run: |
+        cd packages/app-bridge
+        npm version ${{ steps.version.outputs.NEW_VERSION }} --no-git-tag-version
+    
+    - name: Publish package to npm
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      run: |
+        cd packages/app-bridge
+        npm publish --access public
+        
+    - name: Configure Git
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        
+    - name: Commit and push version update
+      run: |
+        git add packages/app-bridge/package.json
+        git commit -m "chore: bump version to ${{ steps.version.outputs.NEW_VERSION }} [skip ci]"
+        git tag "v${{ steps.version.outputs.NEW_VERSION }}"
+        git push
+        git push --tags 
