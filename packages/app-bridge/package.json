@@ -5,31 +5,40 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "*": ["./dist/index.d.ts"],
+      "web": ["./dist/web.d.ts"],
+      "react": ["./dist/react.d.ts"],
+      "native": ["./dist/native.d.ts"],
+      "testing": ["./dist/testing.d.ts"]
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "require": "./dist/index.cjs"
     },
     "./web": {
       "types": "./dist/web.d.ts",
       "import": "./dist/web.mjs",
-      "require": "./dist/web.js"
+      "require": "./dist/web.cjs"
     },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.mjs",
-      "require": "./dist/react.js"
+      "require": "./dist/react.cjs"
     },
     "./native": {
       "types": "./dist/native.d.ts",
       "import": "./dist/native.mjs",
-      "require": "./dist/native.js"
+      "require": "./dist/native.cjs"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.mjs",
-      "require": "./dist/testing.js"
+      "require": "./dist/testing.cjs"
     }
   },
   "files": [
