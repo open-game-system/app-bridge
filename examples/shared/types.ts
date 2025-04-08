@@ -1,7 +1,8 @@
-import { State } from "../../packages/app-bridge/src/types";
+import type { State } from "@open-game-system/app-bridge-types";
 
 export interface CounterState extends State {
   value: number;
+  [key: string]: unknown;
 }
 
 export type CounterEvents =

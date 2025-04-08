@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "cd ../.. && cd packages/app-bridge && pnpm build && cd ../../examples/react-app && vite",
+    "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
@@ -12,11 +12,14 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@open-game-system/app-bridge": "workspace:*",
+    "@open-game-system/app-bridge-web": "workspace:*",
+    "@open-game-system/app-bridge-react": "workspace:*",
+    "@open-game-system/app-bridge-types": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@open-game-system/app-bridge-testing": "workspace:*",
     "@testing-library/react": "^14.2.1",
     "@testing-library/jest-dom": "^6.1.5",
     "chalk": "^5.3.0",
@@ -27,6 +30,7 @@
     "jsdom": "^24.0.0",
     "typescript": "^5.8.3",
     "vite": "^5.1.0",
+    "vite-tsconfig-paths": "^4.3.1",
     "vitest": "^1.2.2"
   }
 } 

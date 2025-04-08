@@ -15,11 +15,13 @@
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
     "typecheck": {
+      "dependsOn": ["^typecheck"],
       "inputs": ["src/**/*.tsx", "src/**/*.ts"]
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "dependsOn": ["^build"]
     }
   }
 } 

@@ -1,0 +1,53 @@
+{
+  "name": "@open-game-system/app-bridge-native",
+  "version": "0.1.0",
+  "description": "React Native specific implementation of the app-bridge ecosystem",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "dev": "tsup --config tsup.config.ts --watch",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@open-game-system/app-bridge-types": "workspace:*",
+    "fast-json-patch": "^3.1.1",
+    "immer": "^10.0.3"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.60.0",
+    "react-native-webview": ">=11.0.0",
+    "typescript": ">=4.5.0"
+  },
+  "devDependencies": {
+    "@types/react-native": "^0.72.0",
+    "@vitest/coverage-v8": "^1.2.2",
+    "jsdom": "^24.0.0",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "typescript",
+    "react-native",
+    "app-bridge",
+    "webview"
+  ],
+  "author": "OpenGameSystem",
+  "license": "MIT"
+} 

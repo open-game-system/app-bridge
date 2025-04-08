@@ -1,0 +1,59 @@
+{
+  "name": "@open-game-system/app-bridge-testing",
+  "version": "0.1.0",
+  "description": "Testing utilities for the app-bridge ecosystem",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "dev": "tsup --config tsup.config.ts --watch",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@open-game-system/app-bridge-types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@testing-library/react": ">=12.0.0",
+    "typescript": ">=4.5.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.0",
+    "@testing-library/react": "^14.1.0",
+    "@vitest/coverage-v8": "^1.2.2",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "rimraf": "^5.0.5",
+    "vitest": "^1.2.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "typescript",
+    "testing",
+    "app-bridge",
+    "mock"
+  ],
+  "author": "OpenGameSystem",
+  "license": "MIT"
+} 
