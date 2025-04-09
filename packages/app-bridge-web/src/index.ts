@@ -5,6 +5,7 @@ import type {
   Event,
   State,
   Store,
+  Operation,
 } from "@open-game-system/app-bridge-types";
 
 export type { BridgeStores, State } from "@open-game-system/app-bridge-types";
@@ -16,15 +17,15 @@ export type WebToNativeMessage =
   | { type: "EVENT"; storeKey: string; event: Event }
   | { type: "BRIDGE_READY" };
 
-export type NativeToWebMessage = {
+export type NativeToWebMessage<TStores extends BridgeStores = BridgeStores> = {
   type: "STATE_INIT";
-  storeKey: string;
-  data: any;
+  storeKey: keyof TStores;
+  data: TStores[keyof TStores]["state"];
 } | {
   type: "STATE_UPDATE";
-  storeKey: string;
-  data?: any;
-  operations?: any[];
+  storeKey: keyof TStores;
+  data?: TStores[keyof TStores]["state"];
+  operations?: Operation[];
 };
 
 export interface WebViewBridge {

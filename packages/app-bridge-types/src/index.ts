@@ -1,5 +1,7 @@
 import { Operation } from "fast-json-patch";
 
+export type { Operation };
+
 /**
  * Represents a generic state type that can be used in stores
  */
@@ -158,16 +160,16 @@ export type WebToNativeMessage =
   | { type: "EVENT"; storeKey: string; event: Event }
   | { type: "BRIDGE_READY" };
 
-export type NativeToWebMessage =
+export type NativeToWebMessage<TStores extends BridgeStores> =
   | {
       type: "STATE_INIT";
-      storeKey: string;
-      data: any;
+      storeKey: keyof TStores;
+      data: TStores[keyof TStores]["state"];
     }
   | {
       type: "STATE_UPDATE";
-      storeKey: string;
-      data?: any;
+      storeKey: keyof TStores;
+      data?: TStores[keyof TStores]["state"];
       operations?: Operation[];
     };
 

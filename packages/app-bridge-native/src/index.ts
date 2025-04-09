@@ -24,16 +24,16 @@ type WebToNativeMessage<TStores extends BridgeStores = BridgeStores> =
       event: TStores[keyof TStores]["events"];
     };
 
-type NativeToWebMessage =
+type NativeToWebMessage<TStores extends BridgeStores = BridgeStores> =
   | {
       type: "STATE_INIT";
-      storeKey: string;
-      data: any;
+      storeKey: keyof TStores;
+      data: TStores[keyof TStores]["state"];
     }
   | {
       type: "STATE_UPDATE";
-      storeKey: string;
-      operations?: any[];
+      storeKey: keyof TStores;
+      operations?: ReturnType<typeof compare>;
     };
 
 /**
@@ -54,8 +54,8 @@ export const createStore: CreateStore = <S extends State, E extends Event>(
     
     dispatch: (event: E) => {
       if (config.producer) {
-        const nextState = produce(currentState, draft => {
-          config.producer!(draft as S, event);
+        const nextState = produce(currentState, (draft: S) => {
+          config.producer!(draft, event);
         });
         currentState = nextState;
         notifyListeners();
@@ -145,7 +145,7 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
     }
   };
 
-  const broadcastToWebViews = (message: any) => {
+  const broadcastToWebViews = (message: NativeToWebMessage<TStores>) => {
     const messageString = JSON.stringify(message);
     webViews.forEach((webView) => {
       webView.postMessage(messageString);
@@ -247,7 +247,8 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
 
         // Subscribe to store changes to broadcast updates
         store.subscribe((state) => {
-          const operations = compare({}, state);
+          const prevState = store.getSnapshot();
+          const operations = compare(prevState, state);
           broadcastToWebViews({
             type: "STATE_UPDATE",
             storeKey: key,
