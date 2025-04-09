@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BridgeContext as DefaultBridgeContext, CounterContext as DefaultCounterContext } from './bridge';
-import type { CounterState } from '../../shared/types';
 import { createBridgeContext } from '@open-game-system/app-bridge-react';
-import type { AppStores } from './types';
+import { AppStores, CounterState } from './types';
 
 type BridgeContextType = ReturnType<typeof createBridgeContext<AppStores>>;
 type StoreContextType = ReturnType<typeof DefaultBridgeContext.createStoreContext<'counter'>>;

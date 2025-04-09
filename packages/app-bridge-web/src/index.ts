@@ -2,10 +2,30 @@ import { applyPatch } from "fast-json-patch";
 import type {
   Bridge,
   BridgeStores,
+  Event,
+  State,
   Store,
-  WebToNativeMessage,
-  NativeToWebMessage,
 } from "@open-game-system/app-bridge-types";
+
+export type { BridgeStores, State } from "@open-game-system/app-bridge-types";
+
+/**
+ * Message types for communication
+ */
+export type WebToNativeMessage =
+  | { type: "EVENT"; storeKey: string; event: Event }
+  | { type: "BRIDGE_READY" };
+
+export type NativeToWebMessage = {
+  type: "STATE_INIT";
+  storeKey: string;
+  data: any;
+} | {
+  type: "STATE_UPDATE";
+  storeKey: string;
+  data?: any;
+  operations?: any[];
+};
 
 export interface WebViewBridge {
   postMessage: (message: string) => void;
@@ -141,16 +161,8 @@ export function createWebBridge<
 
       // Create a new store if needed
       if (!store) {
-        store = {
-          /**
-           * Get the current state of the store
-           */
+        const storeImpl: Store<TStores[K]["state"], TStores[K]["events"]> = {
           getSnapshot: () => stateByStore.get(storeKey)!,
-
-          /**
-           * Subscribe to state changes for this store
-           * Returns an unsubscribe function
-           */
           subscribe: (listener: (state: TStores[K]["state"]) => void) => {
             if (!stateListeners.has(storeKey)) {
               stateListeners.set(storeKey, new Set());
@@ -167,11 +179,6 @@ export function createWebBridge<
               listeners.delete(listener);
             };
           },
-
-          /**
-           * Dispatch an event to the store
-           * Sends the event to the native side
-           */
           dispatch: (event: TStores[K]["events"]) => {
             console.log(`[Web Bridge] Dispatching event for store ${String(storeKey)}:`, event);
             if (!window.ReactNativeWebView) {
@@ -188,18 +195,43 @@ export function createWebBridge<
             console.log("[Web Bridge] Sending message to native:", message);
             window.ReactNativeWebView.postMessage(JSON.stringify(message));
           },
+          reset: () => {
+            // For web bridge, reset is a no-op since state is managed by native
+            console.warn("[Web Bridge] Reset operation not supported in web bridge");
+          }
         };
-        stores.set(storeKey, store);
+        stores.set(storeKey, storeImpl);
+        store = storeImpl;
       }
 
       return store;
     },
 
     /**
+     * Set or remove a store for a given key
+     */
+    setStore: <K extends keyof TStores>(
+      key: K,
+      store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
+    ) => {
+      if (store === undefined) {
+        stores.delete(key);
+        stateByStore.delete(key);
+      } else {
+        stores.set(key, store);
+        const snapshot = store.getSnapshot();
+        if (snapshot !== undefined) {
+          stateByStore.set(key, snapshot);
+        }
+      }
+      notifyStoreListeners();
+    },
+
+    /**
      * Subscribe to store availability changes
      * Returns an unsubscribe function
      */
-    subscribe: (listener) => {
+    subscribe: (listener: () => void) => {
       storeListeners.add(listener);
       return () => {
         storeListeners.delete(listener);

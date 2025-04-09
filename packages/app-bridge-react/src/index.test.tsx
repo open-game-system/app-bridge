@@ -269,9 +269,10 @@ describe("React Bridge Integration", () => {
     describe("useStore hook", () => {
       it("provides access to store when used inside Provider", () => {
         const CounterDisplay = () => {
-          const store = CounterContext.useStore();
+          const store = CounterContext.useStore()!;
+          const snapshot = store.getSnapshot();
           return (
-            <div data-testid="counter">Count: {store.getSnapshot().count}</div>
+            <div data-testid="counter">Count: {snapshot?.count ?? 'N/A'}</div>
           );
         };
 
@@ -290,7 +291,8 @@ describe("React Bridge Integration", () => {
         // Component that uses the store outside of Provider
         const UseStoreOutsideProvider = () => {
           const store = CounterContext.useStore();
-          return <div>{store.getSnapshot().count}</div>;
+          const snapshot = store?.getSnapshot();
+          return <div>{snapshot?.count ?? 'N/A'}</div>;
         };
 
         const errorHandler = vi.fn();
@@ -316,8 +318,8 @@ describe("React Bridge Integration", () => {
     describe("useSelector hook", () => {
       it("selects data from a store", () => {
         const CounterValue = () => {
-          const count = CounterContext.useSelector((state) => state.count);
-          return <div data-testid="counter-value">{count}</div>;
+          const count = CounterContext.useSelector((state) => state?.count);
+          return <div data-testid="counter-value">{count ?? 'N/A'}</div>;
         };
 
         render(
@@ -333,8 +335,8 @@ describe("React Bridge Integration", () => {
 
       it("updates when store state changes", () => {
         const CounterValue = () => {
-          const count = CounterContext.useSelector((state) => state.count);
-          return <div data-testid="counter-value">{count}</div>;
+          const count = CounterContext.useSelector((state) => state?.count);
+          return <div data-testid="counter-value">{count ?? 'N/A'}</div>;
         };
 
         render(
@@ -367,8 +369,8 @@ describe("React Bridge Integration", () => {
 
       it("throws when used outside of Provider", () => {
         const UseSelectorOutsideProvider = () => {
-          const count = CounterContext.useSelector((state) => state.count);
-          return <div>{count}</div>;
+          const count = CounterContext.useSelector((state) => state?.count);
+          return <div>{count ?? 'N/A'}</div>;
         };
 
         const errorHandler = vi.fn();

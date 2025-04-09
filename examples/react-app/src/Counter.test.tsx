@@ -4,25 +4,34 @@ import { Counter } from './Counter';
 import { createMockBridge } from '@open-game-system/app-bridge-testing';
 import { createBridgeContext } from '@open-game-system/app-bridge-react';
 import type { AppStores } from './types';
+import type { Bridge } from '@open-game-system/app-bridge-types';
 
 // Create test-specific contexts
 const TestBridgeContext = createBridgeContext<AppStores>();
 const TestCounterContext = TestBridgeContext.createStoreContext('counter');
 
 describe('Counter', () => {
-  let mockBridge = createMockBridge<AppStores>({
-    initialState: {
-      counter: { value: 0 }
-    }
-  });
+  let mockBridge: Bridge<AppStores>;
 
   beforeEach(() => {
     // Reset the bridge before each test
-    mockBridge = createMockBridge<AppStores>({
+    const baseMockBridge = createMockBridge<AppStores>({
       initialState: {
         counter: { value: 0 }
       }
     });
+
+    // Add required setStore method to satisfy Bridge interface
+    mockBridge = {
+      ...baseMockBridge,
+      setStore: (key, store) => {
+        if (store === undefined) {
+          baseMockBridge.setState(key, { value: 0 });
+        } else {
+          baseMockBridge.setState(key, store.getSnapshot());
+        }
+      }
+    };
   });
 
   it('renders initial counter value', () => {
@@ -50,13 +59,13 @@ describe('Counter', () => {
     fireEvent.click(screen.getByText('+'));
     
     // Check that the event was dispatched
-    const history = mockBridge.getHistory('counter');
+    const history = (mockBridge as any).getHistory('counter');
     expect(history).toContainEqual({ type: 'INCREMENT' });
 
     // Update the state to simulate what would happen in the real app
     await act(async () => {
       const store = mockBridge.getStore('counter');
-      store?.setState({ value: 1 });
+      (store as any).setState({ value: 1 });
     });
 
     expect(screen.getByText('1')).toBeInTheDocument();
@@ -74,13 +83,13 @@ describe('Counter', () => {
     fireEvent.click(screen.getByText('-'));
     
     // Check that the event was dispatched
-    const history = mockBridge.getHistory('counter');
+    const history = (mockBridge as any).getHistory('counter');
     expect(history).toContainEqual({ type: 'DECREMENT' });
 
     // Update the state to simulate what would happen in the real app
     await act(async () => {
       const store = mockBridge.getStore('counter');
-      store?.setState({ value: -1 });
+      (store as any).setState({ value: -1 });
     });
 
     expect(screen.getByText('-1')).toBeInTheDocument();
@@ -103,22 +112,25 @@ describe('Counter', () => {
     fireEvent.click(screen.getByText('Set Value'));
     
     // Check that the event was dispatched
-    const history = mockBridge.getHistory('counter');
+    const history = (mockBridge as any).getHistory('counter');
     expect(history).toContainEqual({ type: 'SET', value: 42 });
 
     // Update the state to simulate what would happen in the real app
     await act(async () => {
       const store = mockBridge.getStore('counter');
-      store?.setState({ value: 42 });
+      (store as any).setState({ value: 42 });
     });
 
     expect(screen.getByText('42')).toBeInTheDocument();
   });
 
   it('shows loading state when store is not available', () => {
-    const emptyBridge = createMockBridge<AppStores>({
-      isSupported: true
-    });
+    const emptyBridge = {
+      ...createMockBridge<AppStores>({
+        isSupported: true
+      }),
+      setStore: () => {} // Add required setStore method
+    };
 
     render(
       <TestBridgeContext.Provider bridge={emptyBridge}>
@@ -135,12 +147,15 @@ describe('Counter', () => {
   });
 
   it('shows unsupported message when bridge is not supported', () => {
-    const unsupportedBridge = createMockBridge<AppStores>({
-      isSupported: false,
-      initialState: {
-        counter: { value: 0 }
-      }
-    });
+    const unsupportedBridge = {
+      ...createMockBridge<AppStores>({
+        isSupported: false,
+        initialState: {
+          counter: { value: 0 }
+        }
+      }),
+      setStore: () => {} // Add required setStore method
+    };
 
     render(
       <TestBridgeContext.Provider bridge={unsupportedBridge}>

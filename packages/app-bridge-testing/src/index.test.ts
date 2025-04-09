@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BridgeStores, State } from "@open-game-system/app-bridge-types";
-import { createMockBridge } from "./index";
+import { createMockBridge, BridgeStores, State } from "./index";
 
 interface CounterState extends State {
   value: number;

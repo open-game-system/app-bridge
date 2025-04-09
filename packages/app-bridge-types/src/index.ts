@@ -9,18 +9,19 @@ export type State = object;
  * Represents a generic event type that can be dispatched to stores
  * Events are discriminated unions with a type field and optional additional properties
  * Example:
- * type CounterEvents = 
+ * type CounterEvents =
  *   | { type: "INCREMENT" }
  *   | { type: "SET"; value: number }
  */
-export type Event = {
-  type: string;
-};
+export type Event = { type: string };
 
 /**
  * Represents a store definition with its state and event types
  */
-export interface StoreDefinition<S extends State = State, E extends Event = Event> {
+export interface StoreDefinition<
+  S extends State = State,
+  E extends Event = Event
+> {
   initialState: S;
   reducers?: Record<string, (state: S, event: E) => S>;
 }
@@ -28,23 +29,86 @@ export interface StoreDefinition<S extends State = State, E extends Event = Even
 /**
  * Represents a collection of store definitions
  */
-export type BridgeStores = Record<string, { state: State; events: Event }>;
+export type BridgeStores<
+  T extends Record<string, { state: State; events: Event }> = Record<
+    string,
+    { state: State; events: Event }
+  >
+> = {
+  [K in keyof T]: {
+    state: T[K]["state"];
+    events: T[K]["events"];
+  };
+};
 
 /**
  * Represents a store instance with state management capabilities
  */
 export interface Store<S extends State = State, E extends Event = Event> {
+  /**
+   * Get the current state
+   */
   getSnapshot(): S;
+
+  /**
+   * Dispatch an event to the store
+   */
   dispatch(event: E): void;
+
+  /**
+   * Subscribe to state changes
+   * Returns an unsubscribe function
+   */
   subscribe(listener: (state: S) => void): () => void;
+
+  /**
+   * Reset store to its initial state
+   */
+  reset(): void;
 }
+
+/**
+ * Producer function type for handling events
+ */
+export type Producer<S extends State, E extends Event> = (draft: S, event: E) => void;
+
+/**
+ * Store configuration for creating new stores
+ */
+export interface StoreConfig<S extends State, E extends Event> {
+  initialState: S;
+  producer?: Producer<S, E>;
+}
+
+/**
+ * Creates a new store with the given configuration
+ */
+export type CreateStore = <S extends State, E extends Event>(
+  config: StoreConfig<S, E>
+) => Store<S, E>;
 
 /**
  * Represents the current state of all stores in a bridge
  */
 export type BridgeState<TStores extends BridgeStores> = {
-  [K in keyof TStores]: TStores[K]['state'] | null;
+  [K in keyof TStores]: TStores[K]["state"] | null;
 };
+
+/**
+ * Utility type to extract store types from any Bridge implementation
+ * Use this to infer the BridgeStores type from a bridge instance
+ *
+ * Example usage:
+ * ```
+ * const bridge = createNativeBridge({ ... });
+ * type MyStores = ExtractStoresType<typeof bridge>;
+ * ```
+ */
+export type ExtractStoresType<T> = T extends {
+  getStore: <K extends keyof (infer U)>(key: K) => any;
+}
+  ? U
+  : never;
 
 /**
  * Represents a WebView instance that can receive JavaScript and handle messages
@@ -73,6 +137,14 @@ export interface Bridge<TStores extends BridgeStores> {
   ) => Store<TStores[K]["state"], TStores[K]["events"]> | undefined;
 
   /**
+   * Set or remove a store for a given key
+   */
+  setStore: <K extends keyof TStores>(
+    key: K,
+    store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
+  ) => void;
+
+  /**
    * Subscribe to store availability changes
    * Returns an unsubscribe function
    */
@@ -86,24 +158,18 @@ export type WebToNativeMessage =
   | { type: "EVENT"; storeKey: string; event: Event }
   | { type: "BRIDGE_READY" };
 
-export type NativeToWebMessage = {
-  type: "STATE_INIT";
-  storeKey: string;
-  data: any;
-} | {
-  type: "STATE_UPDATE";
-  storeKey: string;
-  data?: any;
-  operations?: Operation[];
-};
-
-/**
- * Native-specific store interface with additional capabilities
- */
-export interface NativeStore<TState extends State, TEvent extends Event>
-  extends Store<TState, TEvent> {
-  produce: (producer: (draft: TState) => void) => void;
-}
+export type NativeToWebMessage =
+  | {
+      type: "STATE_INIT";
+      storeKey: string;
+      data: any;
+    }
+  | {
+      type: "STATE_UPDATE";
+      storeKey: string;
+      data?: any;
+      operations?: Operation[];
+    };
 
 /**
  * Native bridge interface with additional capabilities
@@ -125,27 +191,6 @@ export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStor
   unregisterWebView: (webView: WebView) => void;
 
   /**
-   * Produce a new state for a store using Immer
-   */
-  produce: <K extends keyof TStores>(
-    storeKey: K,
-    producer: (draft: TStores[K]["state"]) => void
-  ) => void;
-
-  /**
-   * Set the state of a store directly
-   */
-  setState: <K extends keyof TStores>(
-    key: K,
-    newState: TStores[K]["state"] | undefined
-  ) => void;
-
-  /**
-   * Reset stores to their initial state
-   */
-  reset: (storeKey?: keyof TStores) => void;
-
-  /**
    * Subscribe to WebView ready state changes
    * Returns an unsubscribe function
    */
@@ -155,4 +200,4 @@ export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStor
    * Check if any WebView is ready
    */
   isWebViewReady: () => boolean;
-} 
+}

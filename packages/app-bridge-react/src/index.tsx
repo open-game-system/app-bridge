@@ -128,7 +128,7 @@ export function createBridgeContext<TStores extends BridgeStores>() {
       // Check if bridge is supported - this is a static property that won't change
       const isSupported = bridge.isSupported();
       
-      // Only subscribe to store availability if bridge is supported
+      // Subscribe to store availability
       const getStoreAvailability = useCallback(() => {
         return bridge.getStore(storeKey);
       }, [bridge]);
@@ -167,7 +167,7 @@ export function createBridgeContext<TStores extends BridgeStores>() {
      * @returns The selected data from the store
      * @throws Error if used outside of Store.Provider
      */
-    function useSelector<T>(selector: (state: StoreState) => T): T {
+    function useSelector<T>(selector: (state: StoreState | undefined) => T): T {
       const store = useStore();
       const memoizedSelector = useMemo(() => selector, [selector]);
       

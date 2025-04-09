@@ -2,8 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createWebBridge } from './index';
-import type { BridgeStores, State } from '@open-game-system/app-bridge-types';
+import { createWebBridge, BridgeStores, State } from './index';
 import { Operation } from 'fast-json-patch';
 
 // Define test-specific types
@@ -24,6 +23,10 @@ interface TestStores extends BridgeStores {
   counter: {
     state: CounterState;
     events: CounterEvent;
+  };
+  [key: string]: {
+    state: State;
+    events: { type: string };
   };
 }
 

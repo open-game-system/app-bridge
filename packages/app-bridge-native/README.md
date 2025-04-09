@@ -6,10 +6,6 @@ React Native specific implementation of the app-bridge ecosystem.
 
 ```bash
 npm install @open-game-system/app-bridge-native
-# or
-yarn add @open-game-system/app-bridge-native
-# or
-pnpm add @open-game-system/app-bridge-native
 ```
 
 ## API Reference
@@ -20,42 +16,39 @@ pnpm add @open-game-system/app-bridge-native
 /**
  * Creates a native bridge instance for use in React Native applications
  * @template TStores Store definitions for the bridge
- * @param config Optional configuration for the native bridge
  * @returns A NativeBridge instance
  */
-export function createNativeBridge<TStores extends BridgeStores>(
-  config?: {
-    initialState?: { [K in keyof TStores]?: TStores[K]["state"] };
-    producers?: {
-      [K in keyof TStores]?: (
-        draft: TStores[K]["state"], 
-        event: TStores[K]["events"]
-      ) => void 
-    };
-  }
-): NativeBridge<TStores>;
+function createNativeBridge<TStores extends BridgeStores>(): NativeBridge<TStores>;
+```
+
+### createStore
+
+```typescript
+/**
+ * Creates a new store with the given configuration
+ */
+function createStore<S extends State, E extends Event>(config: StoreConfig<S, E>): Store<S, E>;
 ```
 
 ### NativeBridge Interface
 
 ```typescript
-/**
- * Represents the native bridge interface
- */
-export interface NativeBridge<TStores extends BridgeStores> {
-  /**
-   * Check if the bridge is supported in the current environment
-   * Always returns true for native bridge
-   */
-  isSupported: () => boolean;
-
+interface NativeBridge<TStores extends BridgeStores> {
   /**
    * Get a store by its key
    * Returns undefined if the store doesn't exist
    */
   getStore: <K extends keyof TStores>(
-    storeKey: K
-  ) => NativeStore<TStores[K]["state"], TStores[K]["events"]> | undefined;
+    key: K
+  ) => Store<TStores[K]["state"], TStores[K]["events"]> | undefined;
+
+  /**
+   * Set or remove a store for a given key
+   */
+  setStore: <K extends keyof TStores>(
+    key: K,
+    store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
+  ) => void;
 
   /**
    * Subscribe to store availability changes
@@ -64,103 +57,313 @@ export interface NativeBridge<TStores extends BridgeStores> {
   subscribe: (listener: () => void) => () => void;
 
   /**
-   * Dispatch an event to a store
+   * Process a message received from the WebView
    */
-  dispatch: <K extends keyof TStores>(
-    storeKey: K,
-    event: TStores[K]["events"]
-  ) => void;
+  handleWebMessage: (message: string | { nativeEvent: { data: string } }) => void;
 
   /**
-   * Produce a new state for a store using Immer
+   * Register a WebView to receive state updates
+   * Returns an unsubscribe function
    */
-  produce: <K extends keyof TStores>(
-    storeKey: K,
-    producer: (draft: TStores[K]["state"]) => void
-  ) => void;
+  registerWebView: (webView: WebView | null | undefined) => () => void;
 
   /**
-   * Set the state for a store directly
+   * Unregister a WebView from receiving state updates
    */
-  setState: <K extends keyof TStores>(
-    key: K,
-    newState: TStores[K]["state"] | undefined
-  ) => void;
+  unregisterWebView: (webView: WebView | null | undefined) => void;
+
+  /**
+   * Subscribe to ready state changes for a specific WebView
+   * Returns an unsubscribe function
+   */
+  subscribeToReadyState: (
+    webView: WebView | null | undefined,
+    callback: (isReady: boolean) => void
+  ) => () => void;
+
+  /**
+   * Get the current ready state for a specific WebView
+   */
+  getReadyState: (webView: WebView | null | undefined) => boolean;
 }
 ```
 
-### NativeStore Interface
+### Store Interface
 
 ```typescript
-/**
- * Represents a store in the native bridge
- */
-export interface NativeStore<TState, TEvents> {
+interface Store<S extends State, E extends Event> {
   /**
-   * Get the current state of the store
+   * Get the current state
    */
-  getSnapshot: () => TState;
+  getSnapshot: () => S;
 
   /**
    * Subscribe to state changes
    * Returns an unsubscribe function
    */
-  subscribe: (callback: (state: TState) => void) => () => void;
-
-  /**
-   * Produce a new state using Immer
-   */
-  produce: (producer: (draft: TState) => void) => void;
+  subscribe: (callback: (state: S) => void) => () => void;
 
   /**
    * Dispatch an event to the store
    */
-  dispatch: (event: TEvents) => void;
+  dispatch: (event: E) => void;
+
+  /**
+   * Reset store to its initial state
+   */
+  reset: () => void;
 }
 ```
 
-## Usage
+## Usage Examples
+
+### Example 1: Store with Initial State
+
+In this example, we create a store with a known initial state and register it immediately:
 
 ```typescript
-import { createNativeBridge } from '@open-game-system/app-bridge-native';
+import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
 import type { AppStores } from './types';
 
-// Create the native bridge with initial state and producers
-const bridge = createNativeBridge<AppStores>({
-  initialState: {
-    counter: { value: 0 }
-  },
-  producers: {
-    counter: (draft, event) => {
-      if (event.type === "INCREMENT") {
-        draft.value += 1;
-      } else if (event.type === "DECREMENT") {
-        draft.value -= 1;
-      } else if (event.type === "SET") {
-        draft.value = event.value;
+function MyComponent() {
+  const webViewRef = useRef<WebView>(null);
+  const bridge = useMemo(() => createNativeBridge<AppStores>(), []);
+
+  // Create and register a store with initial state
+  useEffect(() => {
+    const store = createStore({
+      initialState: { value: 0 },
+      producer: (draft, event) => {
+        switch (event.type) {
+          case "INCREMENT":
+            draft.value += 1;
+            break;
+          case "DECREMENT":
+            draft.value -= 1;
+            break;
+        }
       }
-    }
-  }
-});
+    });
 
-// Get a store
-const counterStore = bridge.getStore('counter');
+    bridge.setStore('counter', store);
+    return () => bridge.setStore('counter', undefined);
+  }, [bridge]);
 
-if (counterStore) {
-  // Subscribe to state changes
-  const unsubscribe = counterStore.subscribe(state => {
-    console.log('Counter value:', state.value);
-  });
+  // Register WebView
+  useEffect(() => {
+    const unregister = bridge.registerWebView(webViewRef.current);
+    return () => unregister();
+  }, []);
 
-  // Dispatch events
-  counterStore.dispatch({ type: "INCREMENT" });
-
-  // Or use produce for more complex state updates
-  counterStore.produce(draft => {
-    draft.value += 5;
-  });
-
-  // Clean up subscription
-  unsubscribe();
+  return (
+    <WebView 
+      ref={webViewRef}
+      onMessage={event => bridge.handleWebMessage(event)}
+    />
+  );
 }
-``` 
+```
+
+### Example 2: Store with Delayed Initialization
+
+In this example, we wait for state to arrive from a web client before initializing the store:
+
+```typescript
+import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
+import type { AppStores } from './types';
+
+function MyComponent() {
+  const webViewRef = useRef<WebView>(null);
+  const bridge = useMemo(() => createNativeBridge<AppStores>(), []);
+
+  // Register WebView and handle incoming state
+  useEffect(() => {
+    const unregister = bridge.registerWebView(webViewRef.current);
+    
+    // Listen for ready state to receive initial state
+    const unsubscribeReady = bridge.subscribeToReadyState(webViewRef.current, (isReady) => {
+      if (isReady) {
+        // Create store when we receive state from web
+        bridge.handleWebMessage(JSON.stringify({
+          type: "STATE_INIT",
+          storeKey: "counter",
+          data: { value: 0 }
+        }));
+      }
+    });
+
+    return () => {
+      unregister();
+      unsubscribeReady();
+    };
+  }, [bridge]);
+
+  // Handle store availability
+  useEffect(() => {
+    const unsubscribe = bridge.subscribe(() => {
+      const store = bridge.getStore('counter');
+      if (store) {
+        console.log('Store is now available:', store.getSnapshot());
+      }
+    });
+
+    return () => unsubscribe();
+  }, [bridge]);
+
+  return (
+    <WebView 
+      ref={webViewRef}
+      onMessage={event => bridge.handleWebMessage(event)}
+    />
+  );
+}
+```
+
+### Example 3: Complete React Context Integration
+
+Here's a complete example showing how to:
+1. Set up the bridge in context
+2. Create and manage stores
+3. Handle WebView communication
+4. Subscribe to store changes and ready state
+
+```typescript
+// types.ts
+import type { BridgeStores, State } from '@open-game-system/app-bridge-types';
+
+interface CounterState extends State {
+  value: number;
+}
+
+export interface AppStores extends BridgeStores {
+  counter: {
+    state: CounterState;
+    events: { type: 'INCREMENT' } | { type: 'DECREMENT' };
+  };
+}
+
+// BridgeContext.tsx
+import React, { createContext, useContext, useRef, useEffect } from 'react';
+import { WebView } from 'react-native-webview';
+import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
+import type { AppStores } from './types';
+
+const BridgeContext = createContext<ReturnType<typeof createNativeBridge<AppStores>> | null>(null);
+
+export function BridgeProvider({ children }: { children: React.ReactNode }) {
+  const webViewRef = useRef<WebView>(null);
+  const bridge = useMemo(() => createNativeBridge<AppStores>(), []);
+
+  useEffect(() => {
+    // Create and register the counter store
+    const store = createStore({
+      initialState: { value: 0 },
+      producer: (draft, event) => {
+        switch (event.type) {
+          case "INCREMENT":
+            draft.value += 1;
+            break;
+          case "DECREMENT":
+            draft.value -= 1;
+            break;
+        }
+      }
+    });
+
+    bridge.setStore('counter', store);
+    return () => bridge.setStore('counter', undefined);
+  }, [bridge]);
+
+  useEffect(() => {
+    const unregister = bridge.registerWebView(webViewRef.current);
+    const unsubscribeReady = bridge.subscribeToReadyState(webViewRef.current, (isReady) => {
+      if (isReady) {
+        console.log('Bridge ready!');
+      }
+    });
+
+    return () => {
+      unregister();
+      unsubscribeReady();
+    };
+  }, []);
+
+  return (
+    <BridgeContext.Provider value={bridge}>
+      <WebView
+        ref={webViewRef}
+        onMessage={event => bridge.handleWebMessage(event)}
+        // ... other WebView props
+      />
+      {children}
+    </BridgeContext.Provider>
+  );
+}
+
+export function useBridge() {
+  const bridge = useContext(BridgeContext);
+  if (!bridge) throw new Error('useBridge must be used within BridgeProvider');
+  return bridge;
+}
+
+// Counter.tsx
+import React, { useEffect, useState } from 'react';
+import { View, Text, Button } from 'react-native';
+import { useBridge } from './BridgeContext';
+
+export function Counter() {
+  const bridge = useBridge();
+  const [count, setCount] = useState(0);
+  
+  useEffect(() => {
+    const store = bridge.getStore('counter');
+    if (!store) return;
+
+    // Initialize with current value
+    setCount(store.getSnapshot().value);
+
+    // Subscribe to changes
+    return store.subscribe((state) => {
+      setCount(state.value);
+    });
+  }, []);
+
+  const handleIncrement = () => {
+    const store = bridge.getStore('counter');
+    if (!store) return;
+    store.dispatch({ type: 'INCREMENT' });
+  };
+
+  const handleDecrement = () => {
+    const store = bridge.getStore('counter');
+    if (!store) return;
+    store.dispatch({ type: 'DECREMENT' });
+  };
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Button title="-" onPress={handleDecrement} />
+      <Text style={{ marginHorizontal: 20 }}>{count}</Text>
+      <Button title="+" onPress={handleIncrement} />
+    </View>
+  );
+}
+```
+
+## Important: WebView Message Handling
+
+The bridge requires proper message handling to function:
+
+1. **Connect WebView Messages**: You MUST connect the WebView's `onMessage` event to the bridge:
+```typescript
+<WebView 
+  onMessage={event => bridge.handleWebMessage(event)}
+/>
+```
+
+Without this connection:
+- The bridge won't receive the ready signal from the web bridge
+- The `subscribeToReadyState` callback won't fire with `true`
+- State updates won't be received by the WebView
+
+Note: The web bridge automatically sends the ready signal when initialized - you don't need to handle this manually. 
