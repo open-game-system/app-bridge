@@ -5,7 +5,12 @@
     "composite": true,
     "declarationMap": true,
     "jsx": "react-jsx",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"]
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "moduleResolution": "node",
+    "paths": {
+      "@open-game-system/app-bridge-types": ["../app-bridge-types/src"],
+      "@open-game-system/app-bridge-web": ["../app-bridge-web/src"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"],
