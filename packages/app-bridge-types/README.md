@@ -192,24 +192,3 @@ if (store) {
   unsubscribe();
 }
 ```
-
-## Error Handling
-
-The types include built-in error handling patterns:
-
-1. **Store Availability**
-```typescript
-const store = bridge.getStore('counter');
-if (!store) {
-  // Handle missing store case
-  throw new Error('Counter store not available');
-}
-```
-
-2. **Type Safety**
-```typescript
-// TypeScript will error if you try to:
-// - Dispatch invalid events
-// - Access non-existent stores
-// - Use incorrect state types
-```

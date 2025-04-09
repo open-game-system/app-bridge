@@ -43,7 +43,7 @@ pnpm add @open-game-system/app-bridge-web @open-game-system/app-bridge-react @op
 ### For React Native Apps
 ```bash
 # Required packages for React Native apps
-pnpm add @open-game-system/app-bridge-native @open-game-system/app-bridge-react @open-game-system/app-bridge-types
+pnpm add @open-game-system/app-bridge-native @open-game-system/app-bridge-types
 ```
 
 ### For Testing

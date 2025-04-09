@@ -1,6 +1,6 @@
 # @open-game-system/app-bridge-react
 
-React hooks and components for the app-bridge ecosystem.
+React hooks and components designed for integrating the `@open-game-system/app-bridge-web` package into standard web React applications.
 
 ## Installation
 
