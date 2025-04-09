@@ -842,3 +842,123 @@ Each package should have clear entry points:
    - Bundle size monitoring
 
 Would you like me to start implementing any specific part of this plan? Or would you like more details about any particular aspect?
+
+# README Review Plan
+
+## Files to Review
+- [x] Root README.md
+- [x] packages/app-bridge-types/README.md
+- [x] packages/app-bridge-web/README.md
+- [x] packages/app-bridge-native/README.md
+- [x] packages/app-bridge-react/README.md
+- [x] examples/expo-app/README.md
+- [❌] examples/react-app/README.md (Missing file)
+
+## Review Criteria
+For each README:
+1. Check installation instructions match package.json
+2. Verify API documentation matches actual implementation
+3. Ensure examples are up-to-date with current API
+4. Validate all code snippets compile
+5. Check links are valid and point to correct locations
+6. Verify dependencies and version requirements
+
+## Findings
+
+### Root README.md
+- Installation instructions need to be updated to use workspace dependencies
+- Native side example uses outdated API (removed initialState and producers config)
+- Missing documentation for new createStore API
+- Links to non-existent docs files:
+  - docs/API_REFERENCE.md
+  - docs/ARCHITECTURE.md
+  - docs/CONCEPTS.md
+  - docs/TESTING_STRATEGIES.md
+- Otherwise good overview and structure
+
+### packages/app-bridge-types/README.md
+- API documentation is outdated:
+  - Missing Producer type
+  - Missing StoreConfig interface
+  - Missing CreateStore type
+  - Missing ExtractStoresType utility
+  - Bridge interface missing setStore method
+  - NativeBridge interface shows outdated onWebViewReady/isWebViewReady methods
+- Example code uses outdated StoreDefinition interface which is no longer the primary way to create stores
+- Installation instructions are correct and match package.json
+- No broken links found
+- Dependencies and version requirements are accurate
+
+### packages/app-bridge-web/README.md
+- ✅ Installation instructions are correct and include npm, yarn, and pnpm options
+- ✅ API documentation is present for createWebBridge and Bridge interface
+- ✅ Example code is provided showing basic usage patterns
+- ✅ Dependencies are accurate and up-to-date
+- ❌ Missing documentation for setStore method which is part of the Bridge interface
+- ❌ Example code could be expanded to show more complex scenarios like error handling and state updates
+- ❌ No mention of debugging tips or common troubleshooting scenarios
+- ❌ No explanation of the message protocol between web and native sides
+- ❌ Missing TypeScript configuration examples
+- ❌ No performance considerations or best practices section
+
+### packages/app-bridge-native/README.md
+
+#### Documentation Review
+- Installation instructions are clear and include npm option (✅)
+- API reference is comprehensive with TypeScript interfaces (✅)
+- Example code is provided for common use cases (✅)
+- Dependencies are accurately listed (✅)
+- WebView message handling is well documented (✅)
+- Complete React Context integration example provided (✅)
+
+#### Areas for Improvement
+- No yarn or pnpm installation examples (❌)
+- Missing troubleshooting section (❌)
+- No performance considerations section (❌)
+- No migration guide from older versions (❌)
+- No TypeScript configuration examples beyond basic usage (❌)
+- No error handling best practices section (❌)
+
+#### Key Findings
+1. The `createNativeBridge` function no longer accepts configuration arguments
+2. Store creation is now handled separately via `createStore`
+3. WebView ready state is now tracked per WebView instance
+4. The `setStore` method is required for store registration
+5. Comprehensive examples show proper store lifecycle management
+6. Clear documentation on WebView message handling requirements
+
+### packages/app-bridge-react/README.md
+
+#### Documentation Review
+- Installation instructions include npm, yarn, and pnpm options (✅)
+- API reference is comprehensive with TypeScript interfaces (✅)
+- Example code demonstrates context creation and usage (✅)
+- Dependencies are accurately listed (✅)
+- Component hierarchy is well documented (✅)
+- Hook usage patterns are clearly explained (✅)
+
+#### Key Components
+1. `createBridgeContext<TStores>()` - Creates context and hooks for bridge interaction
+2. `Provider` - Makes bridge available to child components
+3. `createStoreContext(storeKey)` - Creates hooks/components for specific store
+4. `Supported/Unsupported` - Conditional rendering based on bridge support
+
+#### Key Hooks
+1. `useStore()` - Direct store access
+2. `useSelector(selector)` - State selection with automatic updates
+3. `useBridge()` - Internal hook for bridge access
+
+#### Implementation Details
+1. Uses React Context for dependency injection
+2. Implements error boundaries for helpful error messages
+3. Uses `useSyncExternalStore` for state synchronization
+4. Provides memoized components for performance
+5. Includes TypeScript generics for type safety
+6. Supports SSR through server snapshot functions
+
+#### Areas for Improvement
+- No performance optimization guidelines (❌)
+- Missing examples for complex state management (❌)
+- No debugging/troubleshooting section (❌)
+- No examples of error handling patterns (❌)
+- Missing integration examples with other frameworks (❌)

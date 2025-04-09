@@ -52,6 +52,19 @@ pnpm add @open-game-system/app-bridge-native @open-game-system/app-bridge-react 
 pnpm add -D @open-game-system/app-bridge-testing
 ```
 
+### Workspace Setup
+If you're developing within this monorepo:
+```bash
+# Install all dependencies
+pnpm install
+
+# Build all packages
+pnpm build
+
+# Run tests
+pnpm test
+```
+
 ## 🚀 Quick Start
 
 ### Shared Types
@@ -133,46 +146,66 @@ function App() {
 ```typescript
 // 1. Import from the appropriate packages
 import type { AppStores } from './shared/types';
-import { createNativeBridge } from '@open-game-system/app-bridge-native';
+import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
 import { WebView } from 'react-native-webview';
 import { useRef, useEffect } from 'react';
 
-// 2. Create the native bridge with initial state
-const bridge = createNativeBridge<AppStores>({
-  initialState: {
-    counter: { value: 0 }
-  },
-  producers: {
-    counter: (draft, event) => {
-      switch (event.type) {
-        case 'INCREMENT':
-          draft.value += 1;
-          break;
-        case 'DECREMENT':
-          draft.value -= 1;
-          break;
-        case 'SET':
-          draft.value = event.value;
-          break;
-      }
+// 2. Create the native bridge
+const bridge = createNativeBridge<AppStores>();
+
+// 3. Create and configure the counter store
+const counterStore = createStore({
+  initialState: { value: 0 },
+  producer: (draft, event) => {
+    switch (event.type) {
+      case 'INCREMENT':
+        draft.value += 1;
+        break;
+      case 'DECREMENT':
+        draft.value -= 1;
+        break;
+      case 'SET':
+        draft.value = event.value;
+        break;
     }
   }
 });
 
-// 3. Create a WebView wrapper component
+// 4. Register the store with the bridge
+bridge.setStore('counter', counterStore);
+
+// 5. Create a WebView wrapper component
 function GameWebView() {
   const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
     if (!webViewRef.current) return;
-    return bridge.registerWebView(webViewRef.current);
+    
+    // Create a bridge-compatible WebView wrapper
+    const bridgeWebView = {
+      postMessage: (message: string) => webViewRef.current?.postMessage(message),
+      injectJavaScript: (script: string) => webViewRef.current?.injectJavaScript(script),
+    };
+    
+    // Register the WebView with the bridge
+    return bridge.registerWebView(bridgeWebView);
   }, []);
 
+  // Subscribe to ready state
+  const isReady = useSyncExternalStore(
+    (callback) => bridge.subscribeToReadyState(webViewRef.current, callback),
+    () => bridge.getReadyState(webViewRef.current)
+  );
+
   return (
-    <WebView
-      ref={webViewRef}
-      source={{ uri: 'https://your-game-url.com' }}
-    />
+    <>
+      <Text>Bridge Status: {isReady ? 'Ready' : 'Connecting...'}</Text>
+      <WebView
+        ref={webViewRef}
+        source={{ uri: 'https://your-game-url.com' }}
+        onMessage={event => bridge.handleWebMessage(event)}
+      />
+    </>
   );
 }
 ```
