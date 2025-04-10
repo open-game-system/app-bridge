@@ -201,8 +201,9 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
       if (store === undefined) {
         stores.delete(key);
       } else {
+        let prevState = store.getSnapshot();
         stores.set(key, store);
-        // Send initial state to all ready WebViews
+
         readyWebViews.forEach(webView => {
           webView.postMessage(
             JSON.stringify({
@@ -213,15 +214,16 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
           );
         });
 
-        // Subscribe to store changes to broadcast updates
-        store.subscribe((state: TStores[K]["state"]) => {
-          const prevState = store.getSnapshot();
-          const operations = compare(prevState, state);
-          broadcastToWebViews({
-            type: "STATE_UPDATE",
-            storeKey: key,
-            operations,
-          });
+        store.subscribe((currentState: TStores[K]["state"]) => {
+          const operations = compare(prevState, currentState);
+          if (operations.length > 0) {
+            broadcastToWebViews({
+              type: "STATE_UPDATE",
+              storeKey: key,
+              operations,
+            });
+          }
+          prevState = currentState;
         });
       }
       notifyStoreListeners();
