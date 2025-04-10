@@ -1,6 +1,6 @@
 {
   "name": "@open-game-system/app-bridge-native",
-  "version": "0.1.0",
+  "version": "0.20250410.4",
   "description": "React Native specific implementation of the app-bridge ecosystem",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -50,4 +50,4 @@
   ],
   "author": "OpenGameSystem",
   "license": "MIT"
-} 
+}
