@@ -110,7 +110,7 @@ jobs:
         DATE=$(date +'%Y%m%d')
         
         # Get PR number
-        PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\\/pull\\/\\([0-9]*\\)\\/merge/\\1/p')
+        PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
         # Get run attempt for uniqueness within the same PR/run number
         RUN_ATTEMPT=${{ github.run_attempt }}
@@ -130,15 +130,15 @@ jobs:
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
         npm version ${{ steps.version.outputs.DEV_VERSION }} --no-git-tag-version --allow-same-version
         
-        # Add GitHub registry config
+        # Add GitHub registry config using Node.js
         node -e "
           const fs = require('fs');
           const pkgPath = './package.json';
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           if (!pkg.publishConfig) pkg.publishConfig = {};
           pkg.publishConfig.registry = 'https://npm.pkg.github.com/';
-          pkg.publishConfig.access = 'public'; // Ensure access is set if needed
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
+          pkg.publishConfig.access = 'public';
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
         "
 
     - name: Copy README, LICENSE, and docs to ${{ matrix.package }}
@@ -284,7 +284,7 @@ jobs:
           pkg.publishConfig.access = 'public';
           // Remove GH registry if present from dev builds
           delete pkg.publishConfig.registry; 
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
         "
 
     - name: Copy README, LICENSE, and docs to ${{ matrix.package }}
