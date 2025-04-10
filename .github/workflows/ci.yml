@@ -169,35 +169,44 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
-        # Try to publish, if it fails with 409, try incrementing patch and retrying
         MAX_RETRIES=5
         RETRY_COUNT=0
         VERSION=${{ steps.version.outputs.DEV_VERSION }}
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-          if npm publish --tag dev; then
+          # Capture both stdout and stderr
+          NPM_OUTPUT=$(npm publish --tag dev 2>&1)
+          ERROR_CODE=$?
+          
+          echo "$NPM_OUTPUT" # Print output for debugging
+          
+          if [ $ERROR_CODE -eq 0 ]; then
             echo "Successfully published ${VERSION}"
             break
-          else
-            ERROR_CODE=$?
-            if [ $ERROR_CODE -eq 409 ]; then
-              # Extract current patch number and increment
-              CURRENT_PATCH=$(echo $VERSION | sed -n 's/.*\.\([0-9]\+\)-pr.*/\1/p')
-              NEXT_PATCH=$((CURRENT_PATCH + 1))
-              VERSION=$(echo $VERSION | sed "s/\.[0-9]\+-pr/\.${NEXT_PATCH}-pr/")
-              
-              echo "Version conflict, trying with incremented patch: ${VERSION}"
-              npm version $VERSION --no-git-tag-version --allow-same-version
-              RETRY_COUNT=$((RETRY_COUNT + 1))
-            else
-              echo "Failed to publish with error code: ${ERROR_CODE}"
-              exit $ERROR_CODE
+          # Check if exit code is non-zero AND output contains '409 Conflict'
+          elif [[ $ERROR_CODE -ne 0 && "$NPM_OUTPUT" == *"409 Conflict"* ]]; then
+            CURRENT_PATCH=$(echo $VERSION | sed -n 's/.*\.\([0-9]\+\)-pr.*/\1/p')
+            # Handle case where patch number might not be found (sed fails)
+            if [ -z "$CURRENT_PATCH" ]; then
+              echo "Error: Could not extract patch number from version ${VERSION}"
+              exit 1
             fi
+            NEXT_PATCH=$((CURRENT_PATCH + 1))
+            VERSION=$(echo $VERSION | sed "s/\.[0-9]\+-pr/\.${NEXT_PATCH}-pr/")
+            
+            echo "Version conflict detected, trying with incremented patch: ${VERSION}"
+            # Update package.json version
+            npm version $VERSION --no-git-tag-version --allow-same-version
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+          else
+            # Any other non-zero exit code is a real failure
+            echo "Failed to publish with error code: ${ERROR_CODE}"
+            exit $ERROR_CODE
           fi
         done
         
         if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-          echo "Failed to publish after ${MAX_RETRIES} retries"
+          echo "Failed to publish after ${MAX_RETRIES} retries due to persistent conflicts or other errors."
           exit 1
         fi
 
