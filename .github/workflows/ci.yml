@@ -328,29 +328,38 @@ jobs:
       run: |
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
         npm publish --access public
+        echo "NEW_VERSION=${{ steps.version.outputs.NEW_VERSION }}" >> $GITHUB_ENV
+        echo "PACKAGE_NAME=${{ steps.version.outputs.PACKAGE_NAME }}" >> $GITHUB_ENV
+        echo "PACKAGE_DIR=${{ steps.version.outputs.PACKAGE_DIR }}" >> $GITHUB_ENV
 
-    - name: Commit and Push version bump for ${{ matrix.package }}
+  # New job to handle all version bump commits at once
+  commit-version-bumps:
+    needs: publish-production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Git User
       run: |
-        PACKAGE_DIR=${{ steps.version.outputs.PACKAGE_DIR }}
-        PACKAGE_NAME=${{ steps.version.outputs.PACKAGE_NAME }}
-        NEW_VERSION=${{ steps.version.outputs.NEW_VERSION }}
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Commit and Push All Version Bumps
+      run: |
+        # Pull latest changes
+        git pull origin main
         
-        # Check if the package.json was actually changed by npm version
-        if git status --porcelain | grep -q "${PACKAGE_DIR}/package.json"; then
-          git add "${PACKAGE_DIR}/package.json"
-          git commit -m "ci: Bump ${PACKAGE_NAME} to ${NEW_VERSION} [skip ci]"
-          # Add retry logic for push in case of conflicts from parallel jobs
-          n=0
-          until [ $n -ge 5 ]
-          do
-             git pull --rebase && git push && break # Pull first to minimize conflicts, then push
-             n=$((n+1))
-             sleep 15 # Wait before retrying
-          done
-          if [ $n -ge 5 ]; then
-             echo "Failed to push version bump for ${PACKAGE_NAME} after multiple retries."
-             exit 1
-          fi
+        # Check if there are any changes to commit
+        if git status --porcelain | grep -q 'package.json'; then
+          git add "**/package.json"
+          git commit -m "ci: Bump versions [skip ci]"
+          git push origin main
         else
-          echo "No version change detected for ${PACKAGE_NAME}. Skipping commit."
+          echo "No version changes to commit"
         fi 
