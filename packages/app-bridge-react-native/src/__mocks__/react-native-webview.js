@@ -1,18 +1,36 @@
-import React from 'react';
+import React, { forwardRef, useImperativeHandle } from 'react';
 
-// Define the actual mock implementation using forwardRef
-const MockWebViewComponent = React.forwardRef((props, ref) => {
-  React.useImperativeHandle(ref, () => ({
-    postMessage: jest.fn(),
-    injectJavaScript: jest.fn(),
-    reload: jest.fn(),
-  }));
-  // Render null or a simple element like Text
-  return <text>MockWebView</text>; // Using lowercase 'text' as placeholder
+// Import the actual (mocked by jest-expo) View
+const View = require('react-native').View;
+
+// Define the mock methods we need
+const mockWebViewRefMethods = {
+  reload: jest.fn(),
+  postMessage: jest.fn(),
+  injectJavaScript: jest.fn(),
+  // Add other methods if your component uses them
+};
+
+// Create the mock component using forwardRef
+const MockWebViewComponent = forwardRef((props, ref) => {
+  // Expose mock methods via useImperativeHandle
+  useImperativeHandle(ref, () => (mockWebViewRefMethods));
+
+  // Simulate onLoadEnd or other events if needed by tests
+  // useEffect(() => {
+  //   props.onLoadEnd?.();
+  // }, [props.onLoadEnd]);
+
+  // Render a simple View to act as the placeholder
+  return <View {...props} />; 
 });
 
-// Use jest.fn() on the component directly
-export const WebView = jest.fn(MockWebViewComponent);
+// Export the component directly
+export const WebView = MockWebViewComponent;
 
-// Mock any other exports if necessary
+// Optionally, attach mocks statically if needed for other types of assertions,
+// but rely on useImperativeHandle for ref testing.
+// Object.assign(WebView, mockWebViewRefMethods);
+
+// Mock any other exports from the original module if necessary
 // export const otherExport = jest.fn(); 

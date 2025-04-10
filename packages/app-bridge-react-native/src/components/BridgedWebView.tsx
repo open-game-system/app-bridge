@@ -1,11 +1,15 @@
 import React from 'react';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import type { WebViewProps } from 'react-native-webview';
 import type { BridgeStores, NativeBridge } from '@open-game-system/app-bridge-types';
 
 /**
  * Props for BridgedWebView component
+ * Extends standard WebViewProps to allow passing any valid prop.
  */
-export interface BridgedWebViewProps<TStores extends BridgeStores> {
+export interface BridgedWebViewProps<TStores extends BridgeStores>
+  extends Omit<WebViewProps, 'onMessage' | 'source' | 'ref'>
+{
   /**
    * The NativeBridge instance to use for communication
    */
@@ -13,14 +17,14 @@ export interface BridgedWebViewProps<TStores extends BridgeStores> {
   
   /**
    * Optional custom message handler for WebView messages
-   * This will be called after the bridge processes the message
+   * This will be called *after* the bridge processes the message
    */
   onMessage?: (event: WebViewMessageEvent) => void;
   
   /**
-   * The source of the WebView
+   * The source of the WebView (required)
    */
-  source: { uri: string };
+  source: WebViewProps['source'];
 }
 
 /**
@@ -30,6 +34,7 @@ export function BridgedWebView<TStores extends BridgeStores>({
   bridge,
   onMessage,
   source,
+  ...rest
 }: BridgedWebViewProps<TStores>) {
   const webViewRef = React.useRef<WebView>(null);
 
@@ -47,9 +52,7 @@ export function BridgedWebView<TStores extends BridgeStores>({
       bridge.handleWebMessage(event.nativeEvent.data);
       
       // Call custom handler if provided
-      if (onMessage) {
-        onMessage(event);
-      }
+      onMessage?.(event);
     },
     [bridge, onMessage]
   );
@@ -59,6 +62,7 @@ export function BridgedWebView<TStores extends BridgeStores>({
       ref={webViewRef}
       source={source}
       onMessage={handleMessage}
+      {...rest}
     />
   );
 } 
