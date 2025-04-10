@@ -141,24 +141,6 @@ jobs:
           fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
         "
 
-    - name: Copy README, LICENSE, and docs to ${{ matrix.package }}
-      run: |
-        PACKAGE_DIR=${{ steps.version.outputs.PACKAGE_DIR }}
-        cp README.md $PACKAGE_DIR/
-        cp LICENSE $PACKAGE_DIR/ 2>/dev/null || :
-        # Copy docs folder if it exists in root
-        if [ -d "docs" ]; then
-          mkdir -p $PACKAGE_DIR/docs
-          cp -R docs/* $PACKAGE_DIR/docs/ 2>/dev/null || :
-        fi
-        # Copy package-specific README if different from root
-        if [ -f "$PACKAGE_DIR/README.md" ] && ! cmp -s README.md $PACKAGE_DIR/README.md; then
-           echo "Using package-specific README for $PACKAGE_DIR"
-        else
-           cp README.md $PACKAGE_DIR/
-        fi
-
-
     - name: Publish ${{ matrix.package }} to GitHub Packages
       env:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -282,25 +264,10 @@ jobs:
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           if (!pkg.publishConfig) pkg.publishConfig = {};
           pkg.publishConfig.access = 'public';
-          // Remove GH registry if present from dev builds
+          # Remove GH registry if present from dev builds
           delete pkg.publishConfig.registry; 
           fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
         "
-
-    - name: Copy README, LICENSE, and docs to ${{ matrix.package }}
-      run: |
-        PACKAGE_DIR=${{ steps.version.outputs.PACKAGE_DIR }}
-        # Use package-specific README if it exists, otherwise use root
-        if [ -f "$PACKAGE_DIR/README.md" ]; then
-           echo "Using package-specific README for $PACKAGE_DIR"
-        else
-           cp README.md $PACKAGE_DIR/
-        fi
-        cp LICENSE $PACKAGE_DIR/ 2>/dev/null || :
-        if [ -d "docs" ]; then
-          mkdir -p $PACKAGE_DIR/docs
-          cp -R docs/* $PACKAGE_DIR/docs/ 2>/dev/null || :
-        fi
 
     - name: Publish ${{ matrix.package }} to npm
       env:
