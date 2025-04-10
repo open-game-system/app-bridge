@@ -189,23 +189,26 @@ function GameWebView() {
     return bridge.registerWebView(webViewRef.current);
   }, [webViewRef]);
 
-  // Subscribe to ready state
-  const isReady = useSyncExternalStore(
-    (callback) => bridge.subscribeToReadyState(webViewRef.current, callback),
-    () => bridge.getReadyState(webViewRef.current)
-  );
-
   return (
     <>
-      <Text>Bridge Status: {isReady ? "Ready" : "Connecting..."}</Text>
       <WebView
         ref={webViewRef}
         source={{ uri: "https://your-game-url.com" }}
         onMessage={(event) => bridge.handleWebMessage(event)}
       />
+      <Status />
     </>
   );
 }
+
+const Status = () => {
+  const isReady = useSyncExternalStore(
+    (callback) => bridge.subscribeToReadyState(webViewRef.current, callback),
+    () => bridge.getReadyState(webViewRef.current)
+  );
+
+  return <Text>Bridge Status: {isReady ? "Ready" : "Connecting..."}</Text>;
+};
 ```
 
 ### Testing with Mock Bridge

@@ -164,62 +164,7 @@ function MyComponent() {
 }
 ```
 
-### Example 2: Store with Delayed Initialization
-
-In this example, we wait for state to arrive from a web client before initializing the store:
-
-```typescript
-import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
-import type { AppStores } from './types';
-
-function MyComponent() {
-  const webViewRef = useRef<WebView>(null);
-  const bridge = useMemo(() => createNativeBridge<AppStores>(), []);
-
-  // Register WebView and handle incoming state
-  useEffect(() => {
-    const unregister = bridge.registerWebView(webViewRef.current);
-    
-    // Listen for ready state to receive initial state
-    const unsubscribeReady = bridge.subscribeToReadyState(webViewRef.current, (isReady) => {
-      if (isReady) {
-        // Create store when we receive state from web
-        bridge.handleWebMessage(JSON.stringify({
-          type: "STATE_INIT",
-          storeKey: "counter",
-          data: { value: 0 }
-        }));
-      }
-    });
-
-    return () => {
-      unregister();
-      unsubscribeReady();
-    };
-  }, [bridge]);
-
-  // Handle store availability
-  useEffect(() => {
-    const unsubscribe = bridge.subscribe(() => {
-      const store = bridge.getStore('counter');
-      if (store) {
-        console.log('Store is now available:', store.getSnapshot());
-      }
-    });
-
-    return () => unsubscribe();
-  }, [bridge]);
-
-  return (
-    <WebView 
-      ref={webViewRef}
-      onMessage={event => bridge.handleWebMessage(event)}
-    />
-  );
-}
-```
-
-### Example 3: Complete React Context Integration
+### Example 2: Complete React Context Integration
 
 Here's a complete example showing how to:
 1. Set up the bridge in context
@@ -278,7 +223,7 @@ export function BridgeProvider({ children }: { children: React.ReactNode }) {
     const unregister = bridge.registerWebView(webViewRef.current);
     const unsubscribeReady = bridge.subscribeToReadyState(webViewRef.current, (isReady) => {
       if (isReady) {
-        console.log('Bridge ready!');
+        console.log('Bridge is ready for communication!');
       }
     });
 
@@ -362,8 +307,8 @@ The bridge requires proper message handling to function:
 ```
 
 Without this connection:
-- The bridge won't receive the ready signal from the web bridge
+- The bridge won't receive events or the ready signal from the web bridge
 - The `subscribeToReadyState` callback won't fire with `true`
-- State updates won't be received by the WebView
+- State updates won't be sent to or received from the WebView
 
-Note: The web bridge automatically sends the ready signal when initialized - you don't need to handle this manually. 
+Note: The web bridge automatically sends the ready signal and handles internal initialization messages when `registerWebView` and `handleWebMessage` are correctly set up. You do not need to handle `STATE_INIT` or manually signal readiness. 
