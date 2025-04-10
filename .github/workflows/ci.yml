@@ -317,7 +317,7 @@ jobs:
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           if (!pkg.publishConfig) pkg.publishConfig = {};
           pkg.publishConfig.access = 'public';
-          # Remove GH registry if present from dev builds
+          // Remove GH registry if present from dev builds
           delete pkg.publishConfig.registry; 
           fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
         "
