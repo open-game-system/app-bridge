@@ -26,7 +26,8 @@ The app-bridge is split into several packages for better modularity:
 - `@open-game-system/app-bridge-types`: Core type definitions
 - `@open-game-system/app-bridge-web`: Web-specific implementation
 - `@open-game-system/app-bridge-native`: React Native specific code
-- `@open-game-system/app-bridge-react`: React hooks and components
+- `@open-game-system/app-bridge-react`: React hooks and components for web apps
+- `@open-game-system/app-bridge-react-native`: React hooks and components for React Native apps
 - `@open-game-system/app-bridge-testing`: Testing utilities
 
 ## 📥 Installation
@@ -44,7 +45,7 @@ pnpm add @open-game-system/app-bridge-web @open-game-system/app-bridge-react @op
 
 ```bash
 # Required packages for React Native apps
-pnpm add @open-game-system/app-bridge-native @open-game-system/app-bridge-types
+pnpm add @open-game-system/app-bridge-native @open-game-system/app-bridge-react-native @open-game-system/app-bridge-types
 ```
 
 ### For Testing

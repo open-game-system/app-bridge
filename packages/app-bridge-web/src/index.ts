@@ -3,7 +3,6 @@ import type {
   Bridge,
   BridgeStores,
   Event,
-  State,
   Store,
   Operation,
 } from "@open-game-system/app-bridge-types";
