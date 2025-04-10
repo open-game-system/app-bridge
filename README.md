@@ -34,25 +34,30 @@ The app-bridge is split into several packages for better modularity:
 Choose the packages you need based on your use case:
 
 ### For Web Apps
+
 ```bash
 # Required packages for web apps
 pnpm add @open-game-system/app-bridge-web @open-game-system/app-bridge-react @open-game-system/app-bridge-types
 ```
 
 ### For React Native Apps
+
 ```bash
 # Required packages for React Native apps
 pnpm add @open-game-system/app-bridge-native @open-game-system/app-bridge-types
 ```
 
 ### For Testing
+
 ```bash
 # Add testing utilities as a dev dependency
 pnpm add -D @open-game-system/app-bridge-testing
 ```
 
 ### Workspace Setup
+
 If you're developing within this monorepo:
+
 ```bash
 # Install all dependencies
 pnpm install
@@ -93,9 +98,9 @@ export type AppStores = {
 
 ```typescript
 // 1. Import from the appropriate packages
-import type { AppStores } from './shared/types';
-import { createWebBridge } from '@open-game-system/app-bridge-web';
-import { createBridgeContext } from '@open-game-system/app-bridge-react';
+import type { AppStores } from "./shared/types";
+import { createWebBridge } from "@open-game-system/app-bridge-web";
+import { createBridgeContext } from "@open-game-system/app-bridge-react";
 
 // 2. Create the bridge with your type
 const bridge = createWebBridge<AppStores>();
@@ -104,12 +109,12 @@ const bridge = createWebBridge<AppStores>();
 const BridgeContext = createBridgeContext<AppStores>();
 
 // 4. Create store contexts for each store you need
-const CounterContext = BridgeContext.createStoreContext('counter');
+const CounterContext = BridgeContext.createStoreContext("counter");
 
 // 5. Use in components
 function Counter() {
   // Using store context hooks
-  const value = CounterContext.useSelector(state => state.value);
+  const value = CounterContext.useSelector((state) => state.value);
   const store = CounterContext.useStore();
 
   return (
@@ -144,10 +149,13 @@ function App() {
 
 ```typescript
 // 1. Import from the appropriate packages
-import type { AppStores } from './shared/types';
-import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
-import { WebView } from 'react-native-webview';
-import { useRef, useEffect } from 'react';
+import type { AppStores } from "./shared/types";
+import {
+  createNativeBridge,
+  createStore,
+} from "@open-game-system/app-bridge-native";
+import { WebView } from "react-native-webview";
+import { useRef, useEffect } from "react";
 
 // 2. Create the native bridge
 const bridge = createNativeBridge<AppStores>();
@@ -157,38 +165,29 @@ const counterStore = createStore({
   initialState: { value: 0 },
   producer: (draft, event) => {
     switch (event.type) {
-      case 'INCREMENT':
+      case "INCREMENT":
         draft.value += 1;
         break;
-      case 'DECREMENT':
+      case "DECREMENT":
         draft.value -= 1;
         break;
-      case 'SET':
+      case "SET":
         draft.value = event.value;
         break;
     }
-  }
+  },
 });
 
 // 4. Register the store with the bridge
-bridge.setStore('counter', counterStore);
+bridge.setStore("counter", counterStore);
 
 // 5. Create a WebView wrapper component
 function GameWebView() {
   const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
-    if (!webViewRef.current) return;
-    
-    // Create a bridge-compatible WebView wrapper
-    const bridgeWebView = {
-      postMessage: (message: string) => webViewRef.current?.postMessage(message),
-      injectJavaScript: (script: string) => webViewRef.current?.injectJavaScript(script),
-    };
-    
-    // Register the WebView with the bridge
-    return bridge.registerWebView(bridgeWebView);
-  }, []);
+    return bridge.registerWebView(webViewRef.current);
+  }, [webViewRef]);
 
   // Subscribe to ready state
   const isReady = useSyncExternalStore(
@@ -198,11 +197,11 @@ function GameWebView() {
 
   return (
     <>
-      <Text>Bridge Status: {isReady ? 'Ready' : 'Connecting...'}</Text>
+      <Text>Bridge Status: {isReady ? "Ready" : "Connecting..."}</Text>
       <WebView
         ref={webViewRef}
-        source={{ uri: 'https://your-game-url.com' }}
-        onMessage={event => bridge.handleWebMessage(event)}
+        source={{ uri: "https://your-game-url.com" }}
+        onMessage={(event) => bridge.handleWebMessage(event)}
       />
     </>
   );
@@ -212,21 +211,21 @@ function GameWebView() {
 ### Testing with Mock Bridge
 
 ```typescript
-import { createMockBridge } from '@open-game-system/app-bridge-testing';
-import { createBridgeContext } from '@open-game-system/app-bridge-react';
-import type { AppStores } from './shared/types';
+import { createMockBridge } from "@open-game-system/app-bridge-testing";
+import { createBridgeContext } from "@open-game-system/app-bridge-react";
+import type { AppStores } from "./shared/types";
 
-describe('Counter Component', () => {
+describe("Counter Component", () => {
   const mockBridge = createMockBridge<AppStores>({
     initialState: {
-      counter: { value: 0 }
-    }
+      counter: { value: 0 },
+    },
   });
-  
-  const TestBridgeContext = createBridgeContext<AppStores>();
-  const TestCounterContext = TestBridgeContext.createStoreContext('counter');
 
-  it('renders and updates correctly', () => {
+  const TestBridgeContext = createBridgeContext<AppStores>();
+  const TestCounterContext = TestBridgeContext.createStoreContext("counter");
+
+  it("renders and updates correctly", () => {
     render(
       <TestBridgeContext.Provider bridge={mockBridge}>
         <TestCounterContext.Provider>
@@ -235,10 +234,12 @@ describe('Counter Component', () => {
       </TestBridgeContext.Provider>
     );
 
-    expect(screen.getByText('Count: 0')).toBeInTheDocument();
-    
-    fireEvent.click(screen.getByText('+'));
-    expect(mockBridge.getHistory('counter')).toContainEqual({ type: "INCREMENT" });
+    expect(screen.getByText("Count: 0")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("+"));
+    expect(mockBridge.getHistory("counter")).toContainEqual({
+      type: "INCREMENT",
+    });
   });
 });
 ```
