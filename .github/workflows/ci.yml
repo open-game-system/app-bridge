@@ -115,8 +115,22 @@ jobs:
         # Get run attempt for uniqueness within the same PR/run number
         RUN_ATTEMPT=${{ github.run_attempt }}
         
-        # Create a version: MAJOR.DATE.0-prN.BUILD_ATTEMPT
-        DEV_VERSION="${MAJOR_VERSION}.${DATE}.0-pr${PR_NUMBER}.${RUN_ATTEMPT}"
+        # Get published versions to find highest patch
+        echo "Checking npm for existing versions..."
+        NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
+        
+        # Find highest patch for this PR
+        PATTERN="${MAJOR_VERSION}.${DATE}.*-pr${PR_NUMBER}"
+        HIGHEST_PATCH=-1
+        if [[ "$NPM_VERSIONS" != "[]" ]]; then
+          HIGHEST_PATCH=$(echo "$NPM_VERSIONS" | jq -r "map(select(test(\"^${PATTERN}\"))) | map(capture(\"^${MAJOR_VERSION}\\.${DATE}\\.(\\d+)-pr${PR_NUMBER}\") | .[0] | tonumber) | max // -1")
+        fi
+        
+        # Increment patch number
+        NEXT_PATCH=$((HIGHEST_PATCH + 1))
+        
+        # Create version: MAJOR.DATE.PATCH-prN
+        DEV_VERSION="${MAJOR_VERSION}.${DATE}.${NEXT_PATCH}-pr${PR_NUMBER}"
         
         echo "Generated dev version: ${PACKAGE_NAME}@${DEV_VERSION}"
         echo "DEV_VERSION=${DEV_VERSION}" >> $GITHUB_OUTPUT
