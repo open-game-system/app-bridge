@@ -32,14 +32,21 @@ jest.mock('@open-game-system/app-bridge-react-native', () => ({
   }),
   createNativeBridgeContext: () => ({
     BridgeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    createNativeStoreContext: () => ({
-      StoreProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-      useSelector: () => 0,
-      useStore: () => ({
-        dispatch: () => {},
-        reset: () => {}
-      })
-    })
+    createNativeStoreContext: () => {
+      // Simulate the initial state for the counter store
+      const initialState = { value: 0 }; 
+      return {
+        StoreProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+        useSelector: (selectorFn: (state: typeof initialState) => any) => {
+          // Apply the selector to the simulated initial state
+          return selectorFn(initialState);
+        },
+        useStore: () => ({
+          dispatch: () => {},
+          reset: () => {}
+        })
+      };
+    }
   }),
   BridgedWebView: () => null
 }));
