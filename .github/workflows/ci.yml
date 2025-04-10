@@ -112,18 +112,21 @@ jobs:
         # Get PR number
         PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
-        # Get run attempt for uniqueness within the same PR/run number
-        RUN_ATTEMPT=${{ github.run_attempt }}
-        
         # Get published versions to find highest patch
         echo "Checking npm for existing versions..."
         NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
         
         # Find highest patch for this PR
-        PATTERN="${MAJOR_VERSION}.${DATE}.*-pr${PR_NUMBER}"
+        VERSION_PREFIX="${MAJOR_VERSION}.${DATE}"
+        PATTERN="${VERSION_PREFIX}.*-pr${PR_NUMBER}"
         HIGHEST_PATCH=-1
         if [[ "$NPM_VERSIONS" != "[]" ]]; then
-          HIGHEST_PATCH=$(echo "$NPM_VERSIONS" | jq -r "map(select(test(\"^${PATTERN}\"))) | map(capture(\"^${MAJOR_VERSION}\\.${DATE}\\.(\\d+)-pr${PR_NUMBER}\") | .[0] | tonumber) | max // -1")
+          # Need to escape dots for regex and use single quotes to prevent shell expansion
+          HIGHEST_PATCH=$(echo "$NPM_VERSIONS" | jq -r --arg prefix "$VERSION_PREFIX" --arg pr "$PR_NUMBER" '
+            map(select(test("^" + $prefix + "\\\\.[0-9]+-pr" + $pr + "$"))) |
+            map(capture("^" + $prefix + "\\\\.(\\\\d+)-pr" + $pr + "$")[0] | tonumber) |
+            max // -1
+          ')
         fi
         
         # Increment patch number
