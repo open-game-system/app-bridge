@@ -172,39 +172,41 @@ jobs:
         MAX_RETRIES=5
         RETRY_COUNT=0
         VERSION=${{ steps.version.outputs.DEV_VERSION }}
+        OUTPUT_FILE="npm_publish_output.log"
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-          # Capture both stdout and stderr
-          NPM_OUTPUT=$(npm publish --tag dev 2>&1)
+          # Capture both stdout and stderr to a file
+          npm publish --tag dev > "$OUTPUT_FILE" 2>&1
           ERROR_CODE=$?
           
-          echo "$NPM_OUTPUT" # Print output for debugging
+          echo "--- Attempt ${RETRY_COUNT} --- Exit Code: ${ERROR_CODE} ---" # Debugging line
           
           if [ $ERROR_CODE -eq 0 ]; then
             echo "Successfully published ${VERSION}"
+            cat "$OUTPUT_FILE" # Print successful output too
             break
-          # Check if exit code is non-zero AND output contains '409 Conflict'
-          elif [[ $ERROR_CODE -ne 0 && "$NPM_OUTPUT" == *"409 Conflict"* ]]; then
+          # Check if exit code is non-zero AND output file contains '409 Conflict'
+          elif [[ $ERROR_CODE -ne 0 && $(grep -c "409 Conflict" "$OUTPUT_FILE") -gt 0 ]]; then 
             CURRENT_PATCH=$(echo $VERSION | sed -n 's/.*\.\([0-9]\+\)-pr.*/\1/p')
-            # Handle case where patch number might not be found (sed fails)
             if [ -z "$CURRENT_PATCH" ]; then
               echo "Error: Could not extract patch number from version ${VERSION}"
+              cat "$OUTPUT_FILE" # Show output before exiting
               exit 1
             fi
             NEXT_PATCH=$((CURRENT_PATCH + 1))
             VERSION=$(echo $VERSION | sed "s/\.[0-9]\+-pr/\.${NEXT_PATCH}-pr/")
             
             echo "Version conflict detected, trying with incremented patch: ${VERSION}"
-            # Update package.json version
-            npm version $VERSION --no-git-tag-version --allow-same-version
+            # Update package.json version (capture output in case it fails)
+            npm version $VERSION --no-git-tag-version --allow-same-version >> "$OUTPUT_FILE" 2>&1
             RETRY_COUNT=$((RETRY_COUNT + 1))
           else
             # Any other non-zero exit code is a real failure
             echo "-----------------------------------------------------"
             echo "NPM PUBLISH FAILED (NON-409):"
             echo "EXIT CODE: ${ERROR_CODE}"
-            echo "NPM OUTPUT:"
-            echo "${NPM_OUTPUT}" 
+            echo "NPM OUTPUT (from ${OUTPUT_FILE}):"
+            cat "$OUTPUT_FILE" # Print the contents of the output file
             echo "-----------------------------------------------------"
             exit $ERROR_CODE
           fi
@@ -212,6 +214,8 @@ jobs:
         
         if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
           echo "Failed to publish after ${MAX_RETRIES} retries due to persistent conflicts or other errors."
+          echo "Final attempt output:"
+          cat "$OUTPUT_FILE"
           exit 1
         fi
 
