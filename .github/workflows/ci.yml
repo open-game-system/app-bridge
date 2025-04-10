@@ -112,11 +112,16 @@ jobs:
         # Get PR number
         PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
-        # Get published versions to find highest patch
-        echo "Checking npm for existing versions..."
-        NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
+        # Configure npm to use GitHub registry for version check
+        echo "Configuring npm to use GitHub registry for @open-game-system..."
+        echo "@open-game-system:registry=https://npm.pkg.github.com" >> .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc
         
-        # Find highest patch for this PR
+        # Get published versions to find highest patch
+        echo "Checking GitHub registry for existing versions..."
+        NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --registry https://npm.pkg.github.com/ 2>/dev/null || echo "[]")
+        
+        # Find highest patch for this PR today
         VERSION_PREFIX="${MAJOR_VERSION}.${DATE}"
         PATTERN="${VERSION_PREFIX}.*-pr${PR_NUMBER}"
         HIGHEST_PATCH=-1
@@ -141,6 +146,7 @@ jobs:
         echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
       env:
         GITHUB_REF: ${{ github.ref }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Update version in package.json for ${{ matrix.package }}
       run: |
@@ -163,7 +169,37 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
-        npm publish --tag dev
+        # Try to publish, if it fails with 409, try incrementing patch and retrying
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+        VERSION=${{ steps.version.outputs.DEV_VERSION }}
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          if npm publish --tag dev; then
+            echo "Successfully published ${VERSION}"
+            break
+          else
+            ERROR_CODE=$?
+            if [ $ERROR_CODE -eq 409 ]; then
+              # Extract current patch number and increment
+              CURRENT_PATCH=$(echo $VERSION | sed -n 's/.*\.\([0-9]\+\)-pr.*/\1/p')
+              NEXT_PATCH=$((CURRENT_PATCH + 1))
+              VERSION=$(echo $VERSION | sed "s/\.[0-9]\+-pr/\.${NEXT_PATCH}-pr/")
+              
+              echo "Version conflict, trying with incremented patch: ${VERSION}"
+              npm version $VERSION --no-git-tag-version --allow-same-version
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+            else
+              echo "Failed to publish with error code: ${ERROR_CODE}"
+              exit $ERROR_CODE
+            fi
+          fi
+        done
+        
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+          echo "Failed to publish after ${MAX_RETRIES} retries"
+          exit 1
+        fi
 
     - name: Comment on PR for ${{ matrix.package }}
       uses: actions/github-script@v7
