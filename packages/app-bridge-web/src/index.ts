@@ -92,12 +92,13 @@ export function createWebBridge<
     // Send bridge ready message
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: "BRIDGE_READY" }));
 
-    window.addEventListener("message", (event) => {
-      console.log("[Web Bridge] Received message event:", event);
+    const messageHandler = (event: MessageEvent) => {
+      // console.log("[Web Bridge] Received raw message event:", event); // Log raw event
       try {
         const message = JSON.parse(event.data) as NativeToWebMessage;
-        console.log("[Web Bridge] Parsed message data:", message);
+        // console.log("[Web Bridge] Parsed message data:", message); // Log parsed message
         if (message.type === "STATE_INIT") {
+          // console.log(`[Web Bridge] Handling STATE_INIT for store '${String(message.storeKey)}'`, message.data); // Log init handling
           if (message.data === null) {
             // Remove state when receiving null data
             stateByStore.delete(message.storeKey as keyof TStores);
@@ -108,6 +109,7 @@ export function createWebBridge<
           notifyStateListeners(message.storeKey as keyof TStores);
           notifyStoreListeners();
         } else if (message.type === "STATE_UPDATE") {
+          // console.log(`[Web Bridge] Handling STATE_UPDATE for store '${String(message.storeKey)}'`, message.operations); // Log update handling
           if (message.data === null) {
             // Remove state when receiving null data
             stateByStore.delete(message.storeKey as keyof TStores);
@@ -124,14 +126,21 @@ export function createWebBridge<
                 message.storeKey as keyof TStores,
                 result.newDocument
               );
+              // console.log(`[Web Bridge] State updated for store '${String(message.storeKey)}' via patch:`, result.newDocument); // Log state after patch
               notifyStateListeners(message.storeKey as keyof TStores);
             }
           }
         }
       } catch (error) {
-        console.error("[Web Bridge] Error handling message:", error);
+        console.error("[Web Bridge] Error handling message:", error); // Keep basic error log
       }
-    });
+    };
+
+    window.addEventListener("message", messageHandler);
+
+    // Optional: Add cleanup function if the bridge instance can be destroyed
+    // () => window.removeEventListener("message", messageHandler);
+
   } else {
     console.warn("[Web Bridge] ReactNativeWebView NOT detected.");
   }
