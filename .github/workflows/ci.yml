@@ -350,16 +350,51 @@ jobs:
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-    - name: Commit and Push All Version Bumps
+    - name: Update Package Versions and Commit
       run: |
-        # Pull latest changes
-        git pull origin main
+        # Define all packages to check
+        PACKAGES=("types" "web" "native" "react" "testing")
         
-        # Check if there are any changes to commit
-        if git status --porcelain | grep -q 'package.json'; then
-          git add "**/package.json"
-          git commit -m "ci: Bump versions [skip ci]"
+        # Flag to track if any changes were made
+        CHANGES_MADE=false
+        
+        for PACKAGE in "${PACKAGES[@]}"; do
+          PACKAGE_DIR="packages/app-bridge-${PACKAGE}"
+          PACKAGE_JSON="${PACKAGE_DIR}/package.json"
+          PACKAGE_NAME=$(node -p "require('./${PACKAGE_JSON}').name")
+          
+          # Get current version from package.json
+          CURRENT_VERSION=$(node -p "require('./${PACKAGE_JSON}').version")
+          
+          # Query npm for the latest published version
+          echo "Checking npm for latest version of ${PACKAGE_NAME}..."
+          LATEST_VERSION=$(npm view ${PACKAGE_NAME} version 2>/dev/null || echo "0.0.0")
+          
+          echo "Current version: ${CURRENT_VERSION}, Latest published: ${LATEST_VERSION}"
+          
+          # If versions differ, update package.json
+          if [ "${CURRENT_VERSION}" != "${LATEST_VERSION}" ]; then
+            echo "Updating ${PACKAGE_NAME} from ${CURRENT_VERSION} to ${LATEST_VERSION}"
+            
+            # Use node to update package.json
+            node -e "
+              const fs = require('fs');
+              const pkgPath = './${PACKAGE_JSON}';
+              const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+              pkg.version = '${LATEST_VERSION}';
+              fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+            "
+            
+            CHANGES_MADE=true
+          fi
+        done
+        
+        # If any changes were made, commit and push
+        if $CHANGES_MADE; then
+          git add "packages/app-bridge-*/package.json"
+          git commit -m "ci: Update package versions to match npm [skip ci]"
           git push origin main
+          echo "Updated package versions committed and pushed"
         else
           echo "No version changes to commit"
         fi 

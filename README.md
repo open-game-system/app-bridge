@@ -54,21 +54,6 @@ pnpm add @open-game-system/app-bridge-native @open-game-system/app-bridge-types
 pnpm add -D @open-game-system/app-bridge-testing
 ```
 
-### Workspace Setup
-
-If you're developing within this monorepo:
-
-```bash
-# Install all dependencies
-pnpm install
-
-# Build all packages
-pnpm build
-
-# Run tests
-pnpm test
-```
-
 ## 🚀 Quick Start
 
 ### Shared Types

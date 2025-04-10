@@ -167,7 +167,7 @@ export function createBridgeContext<TStores extends BridgeStores>() {
      * @returns The selected data from the store
      * @throws Error if used outside of Store.Provider
      */
-    function useSelector<T>(selector: (state: StoreState | undefined) => T): T {
+    function useSelector<T>(selector: (state: StoreState) => T): T {
       const store = useStore();
       const memoizedSelector = useMemo(() => selector, [selector]);
       
