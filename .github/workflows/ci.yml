@@ -92,7 +92,7 @@ jobs:
 
     - name: Build package ${{ matrix.package }}
       run: |
-        pnpm --filter @open-game-system/app-bridge-${{ matrix.package }} run build
+        pnpm turbo run build --filter=@open-game-system/app-bridge-${{ matrix.package }}...
 
     - name: Generate dev version for ${{ matrix.package }}
       id: version
@@ -237,7 +237,7 @@ jobs:
 
     - name: Build package ${{ matrix.package }}
       run: |
-        pnpm --filter @open-game-system/app-bridge-${{ matrix.package }} run build
+        pnpm turbo run build --filter=@open-game-system/app-bridge-${{ matrix.package }}...
         
     - name: Generate production version for ${{ matrix.package }}
       id: version

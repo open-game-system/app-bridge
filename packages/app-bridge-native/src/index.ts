@@ -246,7 +246,7 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
         });
 
         // Subscribe to store changes to broadcast updates
-        store.subscribe((state) => {
+        store.subscribe((state: TStores[K]["state"]) => {
           const prevState = store.getSnapshot();
           const operations = compare(prevState, state);
           broadcastToWebViews({
