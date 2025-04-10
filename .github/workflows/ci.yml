@@ -53,7 +53,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        package: [types, web, native, react, testing]
+        package: [types, web, native, react, react-native, testing]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -228,7 +228,7 @@ jobs:
       packages: write # Needed to publish to npm
     strategy:
       matrix:
-        package: [types, web, native, react, testing]
+        package: [types, web, native, react, react-native, testing]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -353,7 +353,7 @@ jobs:
     - name: Update Package Versions and Commit
       run: |
         # Define all packages to check
-        PACKAGES=("types" "web" "native" "react" "testing")
+        PACKAGES=("types" "web" "native" "react" "react-native" "testing")
         
         # Flag to track if any changes were made
         CHANGES_MADE=false
