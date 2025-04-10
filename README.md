@@ -7,7 +7,6 @@ A universal bridge that connects web games and the OpenGame App through a shared
 
 ## 📚 Quick Links
 
-- [📖 API Reference](docs/API_REFERENCE.md) - Complete API documentation
 - [🏗️ Architecture](docs/ARCHITECTURE.md) - System design and patterns
 - [🎯 Core Concepts](docs/CONCEPTS.md) - Key concepts and usage patterns
 - [🧪 Testing](docs/TESTING_STRATEGIES.md) - Testing utilities and patterns
