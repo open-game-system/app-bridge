@@ -92,8 +92,7 @@ const App = () => {
   }), []);
 
   return (
-    // Provide the bridge instance, casting via unknown
-    <BridgeContext.BridgeProvider bridge={bridge as unknown as NativeBridge<AppStores>}>
+    <BridgeContext.BridgeProvider bridge={bridge}>
       <SafeAreaView style={styles.container}>
         <Text style={styles.title}>OpenGame App Bridge Example</Text>
         <CounterContext.StoreProvider>
@@ -101,7 +100,7 @@ const App = () => {
         </CounterContext.StoreProvider>
         <View style={styles.webviewContainer}>
           <BridgedWebView
-            bridge={bridge as unknown as NativeBridge<AppStores>}
+            bridge={bridge}
             source={webviewSource}
             style={styles.webview}
           />
