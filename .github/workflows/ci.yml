@@ -49,257 +49,308 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write  # Permission needed to comment on PR
-      packages: write       # Permission needed to publish to GitHub Packages
-    
+      pull-requests: write
+      packages: write
+    strategy:
+      matrix:
+        package: [types, web, native, react, testing]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: 18
         registry-url: 'https://npm.pkg.github.com'
         scope: '@open-game-system'
-    
+
     - name: Setup pnpm
-      uses: pnpm/action-setup@v2
+      uses: pnpm/action-setup@v3
       with:
         version: 8
-    
-    - name: Install dependencies
+
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
       run: |
-        # Install only the main package dependencies to avoid issues with example apps
-        cd packages/app-bridge
-        pnpm install
-    
-    - name: Build package
+        echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+    - uses: actions/cache@v4
+      name: Setup pnpm cache
+      with:
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+
+    - name: Install dependencies for ${{ matrix.package }}
       run: |
-        # Build only the main package, not the examples
-        cd packages/app-bridge
-        pnpm run build
-    
-    - name: Generate dev version
+        # Need to install root deps for build tools, and target package deps
+        pnpm install --filter @open-game-system/app-bridge-${{ matrix.package }}...
+
+    - name: Build package ${{ matrix.package }}
+      run: |
+        pnpm turbo run build --filter=@open-game-system/app-bridge-${{ matrix.package }}...
+
+    - name: Generate dev version for ${{ matrix.package }}
       id: version
       run: |
+        PACKAGE_DIR="packages/app-bridge-${{ matrix.package }}"
+        PACKAGE_JSON_PATH="${PACKAGE_DIR}/package.json"
+        
         # Package name from package.json
-        PACKAGE_NAME=$(node -p "require('./packages/app-bridge/package.json').name")
+        PACKAGE_NAME=$(node -p "require('./${PACKAGE_JSON_PATH}').name")
         
-        # Extract major version (e.g., "0" or "4")
-        MAJOR_VERSION=$(node -p "require('./packages/app-bridge/package.json').version.split('.')[0]")
+        # Extract major version 
+        MAJOR_VERSION=$(node -p "require('./${PACKAGE_JSON_PATH}').version.split('.')[0]")
         
-        # Generate date in format YYYYMMDD
+        # Generate date
         DATE=$(date +'%Y%m%d')
         
         # Get PR number
         PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
-        # Get current run number for a unique build number
-        BUILD_NUMBER=${{ github.run_number }}
+        # Configure npm to use GitHub registry for version check
+        echo "Configuring npm to use GitHub registry for @open-game-system..."
+        echo "@open-game-system:registry=https://npm.pkg.github.com" >> .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc
         
-        # Create a version with format: MAJOR.DATE.0-prN.BUILD
-        # This maintains similar format to production versions but adds PR info
-        DEV_VERSION="${MAJOR_VERSION}.${DATE}.0-pr${PR_NUMBER}.${BUILD_NUMBER}"
+        # Get published versions to find highest patch
+        echo "Checking GitHub registry for existing versions..."
+        NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --registry https://npm.pkg.github.com/ 2>/dev/null || echo "[]")
         
-        echo "Generated dev version: $DEV_VERSION"
-        echo "DEV_VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
-    
-    - name: Update version in package.json
+        # Find highest patch for this PR today
+        VERSION_PREFIX="${MAJOR_VERSION}.${DATE}"
+        PATTERN="${VERSION_PREFIX}.*-pr${PR_NUMBER}"
+        HIGHEST_PATCH=-1
+        if [[ "$NPM_VERSIONS" != "[]" ]]; then
+          # Need to escape dots for regex and use single quotes to prevent shell expansion
+          HIGHEST_PATCH=$(echo "$NPM_VERSIONS" | jq -r --arg prefix "$VERSION_PREFIX" --arg pr "$PR_NUMBER" '
+            map(select(test("^" + $prefix + "\\\\.[0-9]+-pr" + $pr + "$"))) |
+            map(capture("^" + $prefix + "\\\\.(\\\\d+)-pr" + $pr + "$")[0] | tonumber) |
+            max // -1
+          ')
+        fi
+        
+        # Increment patch number
+        NEXT_PATCH=$((HIGHEST_PATCH + 1))
+        
+        # Create version: MAJOR.DATE.PATCH-prN
+        DEV_VERSION="${MAJOR_VERSION}.${DATE}.${NEXT_PATCH}-pr${PR_NUMBER}"
+        
+        echo "Generated dev version: ${PACKAGE_NAME}@${DEV_VERSION}"
+        echo "DEV_VERSION=${DEV_VERSION}" >> $GITHUB_OUTPUT
+        echo "PACKAGE_DIR=${PACKAGE_DIR}" >> $GITHUB_OUTPUT
+        echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
+      env:
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update version in package.json for ${{ matrix.package }}
       run: |
-        cd packages/app-bridge
-        npm version ${{ steps.version.outputs.DEV_VERSION }} --no-git-tag-version
+        cd ${{ steps.version.outputs.PACKAGE_DIR }}
+        npm version ${{ steps.version.outputs.DEV_VERSION }} --no-git-tag-version --allow-same-version
         
-        # Add GitHub registry to package.json for this version
+        # Add GitHub registry config using Node.js
         node -e "
           const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+          const pkgPath = './package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           if (!pkg.publishConfig) pkg.publishConfig = {};
           pkg.publishConfig.registry = 'https://npm.pkg.github.com/';
           pkg.publishConfig.access = 'public';
-          fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
         "
-    
-    - name: Copy README and LICENSE
-      run: |
-        cp README.md packages/app-bridge/
-        cp LICENSE packages/app-bridge/ 2>/dev/null || :
-        # Copy docs folder
-        mkdir -p packages/app-bridge/docs
-        cp -R docs/* packages/app-bridge/docs/ 2>/dev/null || :
-    
-    - name: Publish package to GitHub Packages
+
+    - name: Publish ${{ matrix.package }} to GitHub Packages
       env:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        cd packages/app-bridge
-        npm publish --tag dev --access public
+        cd ${{ steps.version.outputs.PACKAGE_DIR }}
+        # Try to publish, if it fails with 409, try incrementing patch and retrying
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+        VERSION=${{ steps.version.outputs.DEV_VERSION }}
         
-    - name: Comment on PR with published version
-      uses: actions/github-script@v6
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          if npm publish --tag dev; then
+            echo "Successfully published ${VERSION}"
+            break
+          else
+            ERROR_CODE=$?
+            if [ $ERROR_CODE -eq 409 ]; then
+              # Extract current patch number and increment
+              CURRENT_PATCH=$(echo $VERSION | sed -n 's/.*\.\([0-9]\+\)-pr.*/\1/p')
+              NEXT_PATCH=$((CURRENT_PATCH + 1))
+              VERSION=$(echo $VERSION | sed "s/\.[0-9]\+-pr/\.${NEXT_PATCH}-pr/")
+              
+              echo "Version conflict, trying with incremented patch: ${VERSION}"
+              npm version $VERSION --no-git-tag-version --allow-same-version
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+            else
+              echo "Failed to publish with error code: ${ERROR_CODE}"
+              exit $ERROR_CODE
+            fi
+          fi
+        done
+        
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+          echo "Failed to publish after ${MAX_RETRIES} retries"
+          exit 1
+        fi
+
+    - name: Comment on PR for ${{ matrix.package }}
+      uses: actions/github-script@v7
+      if: success() # Only comment if publish succeeded
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const prNumber = context.issue.number;
           const version = '${{ steps.version.outputs.DEV_VERSION }}';
-          const packageName = require('./packages/app-bridge/package.json').name;
+          const packageName = '${{ steps.version.outputs.PACKAGE_NAME }}';
           const repoName = context.repo.owner + '/' + context.repo.repo;
           
           github.rest.issues.createComment({
             issue_number: prNumber,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `📦 Development version published to GitHub Packages: \`${packageName}@${version}\`
-          
-          You can install it with:
-          \`\`\`
-          # Add this to .npmrc
-          @open-game-system:registry=https://npm.pkg.github.com/${repoName}
-          
-          # Then install
-          npm install ${packageName}@${version}
-          # or
-          yarn add ${packageName}@${version}
-          # or
-          pnpm add ${packageName}@${version}
-          \`\`\``
+            body: `📦 Dev version published for \`${packageName}\`: \`${packageName}@${version}\`\n\nInstall via GitHub Packages (ensure .npmrc is configured):\n\`\`\`bash\npnpm add ${packageName}@${version}\n\`\`\``
           });
 
-  publish:
+  publish-production:
     needs: test
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # This permission is needed to push to the repository
-    
+      contents: write  # Needed to push version commit
+      packages: write # Needed to publish to npm
+    strategy:
+      matrix:
+        package: [types, web, native, react, testing]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-    
+        token: ${{ secrets.GITHUB_TOKEN }} # Use GITHUB_TOKEN for checkout to allow push later
+
+    - name: Setup Git User
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: 18
-        registry-url: 'https://registry.npmjs.org'
-    
+        registry-url: 'https://registry.npmjs.org' # Target npm registry
+
     - name: Setup pnpm
-      uses: pnpm/action-setup@v2
+      uses: pnpm/action-setup@v3
       with:
         version: 8
-    
-    - name: Install dependencies
+        
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
       run: |
-        # Install only the main package dependencies to avoid issues with example apps
-        cd packages/app-bridge
-        pnpm install
-    
-    - name: Build package
+        echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+    - uses: actions/cache@v4
+      name: Setup pnpm cache
+      with:
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+
+    - name: Install dependencies for ${{ matrix.package }}
       run: |
-        # Build only the main package, not the examples
-        cd packages/app-bridge
-        pnpm run build
-    
-    - name: Generate date-based version
+        # Need to install root deps for build tools, and target package deps
+        pnpm install --filter @open-game-system/app-bridge-${{ matrix.package }}...
+
+    - name: Build package ${{ matrix.package }}
+      run: |
+        pnpm turbo run build --filter=@open-game-system/app-bridge-${{ matrix.package }}...
+        
+    - name: Generate production version for ${{ matrix.package }}
       id: version
       run: |
-        # Package name from package.json
-        PACKAGE_NAME=$(node -p "require('./packages/app-bridge/package.json').name")
-        
-        # Extract major version (e.g., "0" or "4")
-        MAJOR_VERSION=$(node -p "require('./packages/app-bridge/package.json').version.split('.')[0]")
-        
-        # Generate date in format YYYYMMDD
+        PACKAGE_DIR="packages/app-bridge-${{ matrix.package }}"
+        PACKAGE_JSON_PATH="${PACKAGE_DIR}/package.json"
+        PACKAGE_NAME=$(node -p "require('./${PACKAGE_JSON_PATH}').name")
+        MAJOR_VERSION=$(node -p "require('./${PACKAGE_JSON_PATH}').version.split('.')[0]")
         DATE=$(date +'%Y%m%d')
         
-        # Check if there are any published versions with this date prefix
-        echo "Checking for existing versions with prefix ${MAJOR_VERSION}.${DATE}..."
+        echo "Checking npm for existing versions of ${PACKAGE_NAME} with prefix ${MAJOR_VERSION}.${DATE}..."
         
-        # Get the latest published version with npm view
-        # Use || echo "[]" to handle case when package doesn't exist yet
-        # Also handle the case where npm returns an error object by checking for error
-        LATEST_PUBLISHED=$(npm view ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
+        # Get published versions, handle errors/empty results
+        NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --json 2>/dev/null || echo "[]")
         
-        # Find the highest patch number for today's date
-        HIGHEST_PATCH=0
-        
-        # Only try to parse if the response isn't an error and isn't empty
-        if [[ "$LATEST_PUBLISHED" != "[]" && "$LATEST_PUBLISHED" != "" && "$LATEST_PUBLISHED" != *"error"* ]]; then
-          # Parse versions and find the highest patch for today
+        # Find highest patch for today
+        HIGHEST_PATCH=-1
+        if [[ "$NPM_VERSIONS" != "[]" && "$NPM_VERSIONS" != *error* ]]; then
           PATTERN="${MAJOR_VERSION}.${DATE}."
-          HIGHEST_PATCH=$(echo $LATEST_PUBLISHED | \
-            node -e "
-              try {
-                const data = require('fs').readFileSync(0, 'utf-8');
-                let versions = [];
-                try {
-                  versions = JSON.parse(data);
-                } catch (e) {
-                  console.error('Failed to parse JSON:', e);
-                  process.exit(0); // Exit gracefully with 0 patch version
-                }
-                
-                const pattern = process.argv[1];
-                const todayVersions = Array.isArray(versions) ? 
-                  versions.filter(v => v.startsWith(pattern)) : 
-                  Object.keys(versions).filter(v => v.startsWith(pattern));
-                
-                if (todayVersions.length > 0) {
-                  const patches = todayVersions.map(v => parseInt(v.substring(pattern.length), 10))
-                                            .filter(n => !isNaN(n));
-                  console.log(Math.max(...patches, 0));
-                } else {
-                  console.log(0);
-                }
-              } catch (e) {
-                console.error('Error in script:', e);
-                console.log(0); // Default to 0 if any error occurs
-              }
-            " "$PATTERN" || echo "0")
+          HIGHEST_PATCH=$(echo "$NPM_VERSIONS" | jq -c --arg pattern "$PATTERN" 'map(select(startswith($pattern))) | map(split(".")[2] | tonumber) | max // -1')
         fi
         
-        echo "Highest patch found: ${HIGHEST_PATCH}"
+        # Calculate next patch version
+        NEXT_PATCH=$((HIGHEST_PATCH + 1))
+        NEW_VERSION="${MAJOR_VERSION}.${DATE}.${NEXT_PATCH}"
         
-        # Increment the patch version
-        PATCH_VERSION=$((HIGHEST_PATCH + 1))
-        
-        # Combine to form CloudFlare-style version: MAJOR.YYYYMMDD.PATCH
-        NEW_VERSION="${MAJOR_VERSION}.${DATE}.${PATCH_VERSION}"
-        
-        echo "Generated new version: $NEW_VERSION"
-        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
-    
-    - name: Update version in package.json
+        echo "Generated production version: ${PACKAGE_NAME}@${NEW_VERSION}"
+        echo "NEW_VERSION=${NEW_VERSION}" >> $GITHUB_OUTPUT
+        echo "PACKAGE_DIR=${PACKAGE_DIR}" >> $GITHUB_OUTPUT
+        echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
+
+    - name: Update version in package.json for ${{ matrix.package }}
       run: |
-        cd packages/app-bridge
-        npm version ${{ steps.version.outputs.NEW_VERSION }} --no-git-tag-version
-    
-    - name: Copy README and LICENSE
-      run: |
-        cp README.md packages/app-bridge/
-        cp LICENSE packages/app-bridge/ 2>/dev/null || :
-        # Copy docs folder
-        mkdir -p packages/app-bridge/docs
-        cp -R docs/* packages/app-bridge/docs/ 2>/dev/null || :
-    
-    - name: Publish package to npm
+        cd ${{ steps.version.outputs.PACKAGE_DIR }}
+        # Use --allow-same-version in case patch calculation resulted in 0 and current version is also 0
+        npm version ${{ steps.version.outputs.NEW_VERSION }} --no-git-tag-version --allow-same-version 
+        
+        # Ensure public access in package.json for npm
+        node -e "
+          const fs = require('fs');
+          const pkgPath = './package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          if (!pkg.publishConfig) pkg.publishConfig = {};
+          pkg.publishConfig.access = 'public';
+          # Remove GH registry if present from dev builds
+          delete pkg.publishConfig.registry; 
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+        "
+
+    - name: Publish ${{ matrix.package }} to npm
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
-        cd packages/app-bridge
+        cd ${{ steps.version.outputs.PACKAGE_DIR }}
         npm publish --access public
-        
-    - name: Configure Git
+
+    - name: Commit and Push version bump for ${{ matrix.package }}
       run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
+        PACKAGE_DIR=${{ steps.version.outputs.PACKAGE_DIR }}
+        PACKAGE_NAME=${{ steps.version.outputs.PACKAGE_NAME }}
+        NEW_VERSION=${{ steps.version.outputs.NEW_VERSION }}
         
-    - name: Commit and push version update
-      run: |
-        git add packages/app-bridge/package.json
-        git commit -m "chore: bump version to ${{ steps.version.outputs.NEW_VERSION }} [skip ci]"
-        git tag "v${{ steps.version.outputs.NEW_VERSION }}"
-        git push
-        git push --tags 
+        # Check if the package.json was actually changed by npm version
+        if git status --porcelain | grep -q "${PACKAGE_DIR}/package.json"; then
+          git add "${PACKAGE_DIR}/package.json"
+          git commit -m "ci: Bump ${PACKAGE_NAME} to ${NEW_VERSION} [skip ci]"
+          # Add retry logic for push in case of conflicts from parallel jobs
+          n=0
+          until [ $n -ge 5 ]
+          do
+             git pull --rebase && git push && break # Pull first to minimize conflicts, then push
+             n=$((n+1))
+             sleep 15 # Wait before retrying
+          done
+          if [ $n -ge 5 ]; then
+             echo "Failed to push version bump for ${PACKAGE_NAME} after multiple retries."
+             exit 1
+          fi
+        else
+          echo "No version change detected for ${PACKAGE_NAME}. Skipping commit."
+        fi 

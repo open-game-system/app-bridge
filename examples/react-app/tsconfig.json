@@ -1,25 +1,44 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
+
+    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+
+    /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+
+    /* Paths */
     "baseUrl": ".",
     "paths": {
-      "@open-game-system/app-bridge": ["../../packages/app-bridge/src"]
+      "@open-game-system/app-bridge-types": ["../../packages/app-bridge-types/src"],
+      "@open-game-system/app-bridge-web": ["../../packages/app-bridge-web/src"],
+      "@open-game-system/app-bridge-react": ["../../packages/app-bridge-react/src"],
+      "@open-game-system/app-bridge-testing": ["../../packages/app-bridge-testing/src"]
     }
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "src",
+    "../shared/**/*",
+    "../../packages/app-bridge-types/src/**/*",
+    "../../packages/app-bridge-web/src/**/*",
+    "../../packages/app-bridge-react/src/**/*",
+    "../../packages/app-bridge-testing/src/**/*"
+  ],
+  "references": [
+    { "path": "./tsconfig.node.json" }
+  ]
 }

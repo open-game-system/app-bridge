@@ -1,18 +1,18 @@
-import { createNativeBridge } from "@open-game-system/app-bridge/native";
+import { createNativeBridge, createStore, type WebView as BridgeWebView } from "@open-game-system/app-bridge-native";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useSyncExternalStore } from "react";
 import {
   Button,
-  NativeSyntheticEvent,
   Platform,
   SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import WebView from "react-native-webview";
+import { WebView } from "react-native-webview";
 import { CounterEvents, CounterState } from "../shared/types";
 
+// Local type definition for AppStores
 type AppStores = {
   counter: {
     state: CounterState;
@@ -23,136 +23,94 @@ type AppStores = {
 // Create a component that uses the app bridge
 const App = () => {
   const webViewRef = useRef<WebView>(null);
-  const [counterValue, setCounterValue] = useState(0);
-  const [webViewReady, setWebViewReady] = useState(false);
 
   // Create the bridge for communication between native and web
-  const bridge = React.useMemo(
-    () =>
-      createNativeBridge<AppStores>({
-        initialState: {
-          counter: { value: 0 },
-        },
-        // Define producers for each store to handle events
-        producers: {
-          // Counter store producer - required to handle events from the web
-          counter: (draft, event) => {
-            // Use a switch statement to handle different event types
-            switch (event.type) {
-              case "INCREMENT":
-                // Immer allows us to "mutate" the draft directly
-                draft.value += 1;
-                break;
+  const bridge = React.useMemo(() => {
+    console.log("[Native App] Creating Native Bridge...");
+    return createNativeBridge<AppStores>();
+  }, []);
 
-              case "DECREMENT":
-                draft.value -= 1;
-                break;
-
-              case "SET":
-                draft.value = event.value;
-                break;
-
-              default:
-                // Use console.warn for unhandled events as it indicates a potential issue
-                console.warn(`Unhandled counter event: ${(event as any).type}`);
-                break;
-            }
-          },
-          // Add other store producers as needed for handling their events
-        },
-      }),
-    []
-  );
-
+  // Create and register the counter store
   useEffect(() => {
-    // Get a reference to the counter store
-    const counterStore = bridge.getStore("counter");
-
-    // Subscribe to counter changes
-    const unsubscribe = counterStore?.subscribe((state) => {
-      setCounterValue(state.value);
+    const store = createStore({
+      initialState: { value: 0 },
+      producer: (draft: CounterState, event: CounterEvents) => {
+        switch (event.type) {
+          case "INCREMENT":
+            draft.value += 1;
+            break;
+          case "DECREMENT":
+            draft.value -= 1;
+            break;
+          case "SET":
+            draft.value = event.value;
+            break;
+        }
+      },
     });
 
-    return () => {
-      // Clean up subscriptions when component unmounts
-      unsubscribe?.();
-    };
+    bridge.setStore('counter', store);
+    return () => bridge.setStore('counter', undefined);
   }, [bridge]);
-
-  // Register WebView with the bridge only after it's ready
-  useEffect(() => {
-    if (webViewRef.current && webViewReady) {
-      // Register the WebView with the bridge
-      const unregisterWebView = bridge.registerWebView(webViewRef.current);
-
-      // Force update all stores to ensure WebView gets initial state
-      // Use the store keys we know exist in our AppStores type
-      const storeKeys: (keyof AppStores)[] = ["counter"];
-      storeKeys.forEach((storeKey) => {
-        const store = bridge.getStore(storeKey);
-        if (store) {
-          // Use produce with identity function to trigger an update
-          // without changing the state
-          bridge.produce(storeKey, (draft) => {
-            // This is an identity function that doesn't change state
-            // but will trigger the store to send its state to WebView
-          });
-        }
-      });
-
-      return () => {
-        unregisterWebView();
-      };
+  
+  // Subscribe to counter state using useSyncExternalStore
+  const counterValue = useSyncExternalStore(
+    (callback) => {
+      const store = bridge.getStore('counter');
+      if (!store) return () => {};
+      return store.subscribe(() => callback());
+    },
+    () => {
+      const store = bridge.getStore('counter');
+      return store?.getSnapshot()?.value ?? 0;
     }
-  }, [bridge, webViewRef.current, webViewReady]);
+  );
+
+  // Subscribe to bridge ready state
+  const isReady = useSyncExternalStore(
+    (callback) => {
+      return bridge.subscribeToReadyState(webViewRef.current, (ready) => callback());
+    },
+    () => bridge.getReadyState(webViewRef.current)
+  );
+
+  // Register WebView with the bridge
+  useEffect(() => {
+    console.log("[Native App] WebView Registration Effect triggered.");
+    if (webViewRef.current) {
+      console.log("[Native App] WebView ref found, registering WebView with bridge...");
+      // Create a bridge-compatible WebView wrapper
+      const bridgeWebView: BridgeWebView = {
+        postMessage: (message) => webViewRef.current?.postMessage(message),
+        injectJavaScript: (script) => webViewRef.current?.injectJavaScript(script),
+      };
+      return bridge.registerWebView(bridgeWebView);
+    } else {
+      console.log("[Native App] WebView ref NOT found yet.");
+    }
+  }, [bridge, webViewRef.current]);
 
   // Actions to modify the counter
-  const incrementCounter = () =>
-    bridge.produce("counter", (draft) => {
-      draft.value += 1;
-    });
+  const incrementCounter = () => {
+    const store = bridge.getStore('counter');
+    if (store) {
+      store.dispatch({ type: "INCREMENT" });
+    }
+  };
 
-  const decrementCounter = () =>
-    bridge.produce("counter", (draft) => {
-      draft.value -= 1;
-    });
+  const decrementCounter = () => {
+    const store = bridge.getStore('counter');
+    if (store) {
+      store.dispatch({ type: "DECREMENT" });
+    }
+  };
 
-  const resetCounter = () => bridge.setState("counter", { value: 0 });
-
-  // Handle messages FROM the WebView
-  const handleWebViewMessage = useCallback(
-    (event: NativeSyntheticEvent<{ data: string }>) => {
-      try {
-        const data = JSON.parse(event.nativeEvent.data);
-
-        // If this is an event message, manually process it
-        if (data.type === "EVENT" && data.storeKey && data.event) {
-          const { storeKey, event } = data;
-
-          // Handle counter events specifically
-          if (storeKey === "counter") {
-            if (event.type === "INCREMENT") {
-              incrementCounter();
-            } else if (event.type === "DECREMENT") {
-              decrementCounter();
-            } else if (event.type === "SET" && "value" in event) {
-              bridge.setState("counter", { value: event.value });
-            }
-          }
-        } else if (data.type === "WEBVIEW_READY") {
-          // WebView is now ready to receive messages
-          setWebViewReady(true);
-        }
-      } catch (e) {
-        console.warn(
-          "Error parsing WebView message:",
-          event.nativeEvent.data,
-          e
-        );
-      }
-    },
-    [bridge]
-  );
+  const resetCounter = () => {
+    const store = bridge.getStore('counter');
+    if (store) {
+      store.reset();
+    }
+  };
 
   // Platform-specific WebView source
   const webviewSource = Platform.select({
@@ -160,13 +118,9 @@ const App = () => {
     android: { uri: "http://10.0.2.2:5173/" },
   });
 
-  // Inject JavaScript to notify when the WebView is fully loaded
+  // Inject JavaScript to add visual indicator that bridge is active
   const injectedJavaScript = `
-    // Send a message to notify that the WebView is ready
     if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'WEBVIEW_READY' }));
-
-      // Make it more visible when bridge is active
       const addStatusBar = () => {
         const statusBar = document.createElement('div');
         statusBar.id = 'webview-status-bar';
@@ -179,11 +133,10 @@ const App = () => {
         statusBar.style.color = 'white';
         statusBar.style.textAlign = 'center';
         statusBar.style.zIndex = '9999';
-        statusBar.innerText = 'Bridge Status: Detected (Running in WebView)';
+        statusBar.innerText = 'Bridge Status: ${isReady ? 'Ready' : 'Connecting'}';
         document.body.prepend(statusBar);
       };
 
-      // Wait for DOM to be fully loaded
       if (document.readyState === 'complete') {
         addStatusBar();
       } else {
@@ -196,6 +149,13 @@ const App = () => {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>OpenGame App Bridge Example</Text>
+
+      {/* Bridge status */}
+      <View style={[styles.statusBar, { backgroundColor: isReady ? '#4CAF50' : '#FFA000' }]}>
+        <Text style={styles.statusText}>
+          Bridge Status: {isReady ? 'Ready' : 'Connecting...'}
+        </Text>
+      </View>
 
       {/* Native counter UI */}
       <View style={styles.counterContainer}>
@@ -218,8 +178,8 @@ const App = () => {
           ref={webViewRef}
           source={webviewSource}
           style={styles.webview}
-          onMessage={handleWebViewMessage}
           injectedJavaScript={injectedJavaScript}
+          onMessage={event => bridge.handleWebMessage(event)}
         />
       </View>
       <StatusBar style="auto" />
@@ -238,6 +198,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginVertical: 20,
     textAlign: "center",
+  },
+  statusBar: {
+    padding: 8,
+    marginBottom: 16,
+    borderRadius: 4,
+  },
+  statusText: {
+    color: 'white',
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
   counterContainer: {
     padding: 16,

@@ -10,8 +10,9 @@
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.2",
-    "turbo": "^1.12.2",
+    "turbo": "^2.5.0",
     "typescript": "^5.3.3",
     "vitest": "^1.2.2"
-  }
+  },
+  "packageManager": "pnpm@9.5.0"
 }
