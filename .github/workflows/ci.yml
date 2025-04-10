@@ -200,7 +200,12 @@ jobs:
             RETRY_COUNT=$((RETRY_COUNT + 1))
           else
             # Any other non-zero exit code is a real failure
-            echo "Failed to publish with error code: ${ERROR_CODE}"
+            echo "-----------------------------------------------------"
+            echo "NPM PUBLISH FAILED (NON-409):"
+            echo "EXIT CODE: ${ERROR_CODE}"
+            echo "NPM OUTPUT:"
+            echo "${NPM_OUTPUT}" 
+            echo "-----------------------------------------------------"
             exit $ERROR_CODE
           fi
         done
