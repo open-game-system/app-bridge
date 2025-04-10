@@ -26,9 +26,9 @@ importers:
       '@open-game-system/app-bridge-native':
         specifier: workspace:*
         version: link:../../packages/app-bridge-native
-      '@open-game-system/app-bridge-react':
+      '@open-game-system/app-bridge-react-native':
         specifier: workspace:*
-        version: link:../../packages/app-bridge-react
+        version: link:../../packages/app-bridge-react-native
       '@open-game-system/app-bridge-types':
         specifier: workspace:*
         version: link:../../packages/app-bridge-types

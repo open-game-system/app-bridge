@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@open-game-system/app-bridge-native": "workspace:*",
-    "@open-game-system/app-bridge-react": "workspace:*",
+    "@open-game-system/app-bridge-react-native": "workspace:*",
     "@open-game-system/app-bridge-types": "workspace:*",
     "expo": "~52.0.43",
     "expo-status-bar": "~2.0.1",

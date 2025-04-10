@@ -1,6 +1,6 @@
-import type { BridgeStores, State } from "@open-game-system/app-bridge-types";
+import type { NativeBridge, BridgeStores, State } from "@open-game-system/app-bridge-types";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { createNativeBridge, createStore, NativeBridge, WebView } from "./index";
+import { createNativeBridge, createStore, WebView } from "./index";
 
 // Base state type with discriminator
 interface CounterState extends State {

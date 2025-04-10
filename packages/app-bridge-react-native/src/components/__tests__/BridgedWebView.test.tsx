@@ -31,6 +31,8 @@ describe('BridgedWebView', () => {
       onWebViewReady: jest.fn(() => jest.fn()), // Returns unsubscribe function
       setStore: jest.fn(), // Add setStore
       isWebViewReady: jest.fn().mockReturnValue(true), // Mock ready state
+      subscribeToReadyState: jest.fn(() => jest.fn()), // Returns unsubscribe function
+      getReadyState: jest.fn().mockReturnValue(true), // Mock ready state
     } as NativeBridge<TestStores>; // Cast to ensure type compatibility
   }
 
