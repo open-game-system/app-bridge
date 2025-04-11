@@ -15,7 +15,8 @@
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "node -e \"const fs=require('fs'); const pkgPath='./package.json'; const pkg=JSON.parse(fs.readFileSync(pkgPath)); const deps=pkg.dependencies||{}; const peerDeps=pkg.peerDependencies||{}; const devDeps=pkg.devDependencies||{}; const version='^'+pkg.version.split('-')[0]; /* Use major/minor/patch from current version */ const fix=(obj)=>(Object.fromEntries(Object.entries(obj).map(([k,v])=>[k,v.startsWith('workspace:')?version:v]))); pkg.dependencies=fix(deps); pkg.peerDependencies=fix(peerDeps); pkg.devDependencies=fix(devDeps); fs.writeFileSync(pkgPath,JSON.stringify(pkg,null,2)+'\\n'); console.log('Replaced workspace:* versions in', pkgPath);\""
   },
   "dependencies": {
     "fast-json-patch": "^3.1.1"
