@@ -37,23 +37,28 @@ export const createStore: CreateStore = <
     stateListeners.forEach(listener => listener(currentState));
   };
 
-  const notifyEventListeners = async (eventType: E['type'], event: E) => {
+  const notifyEventListeners = (eventType: E['type'], event: E) => {
     const listeners = eventListeners.get(eventType as string);
     if (listeners) {
-      for (const listener of listeners) {
+      listeners.forEach(listener => {
           try {
-              await listener(event, storeInstance);
+              const result = listener(event, storeInstance);
+              if (result instanceof Promise) {
+                  result.catch(error => {
+                     console.error(`[Native Store] Unhandled promise rejection in async event listener for type "${eventType}":`, error);
+                  });
+              }
           } catch (error) {
               console.error(`[Native Store] Error in event listener for type "${eventType}":`, error);
           }
-      }
+      });
     }
   };
 
   storeInstance = {
     getSnapshot: () => currentState,
 
-    dispatch: async (event: E): Promise<void> => {
+    dispatch: (event: E): void => {
       let stateChanged = false;
       if (config.producer) {
         const nextState = produce(currentState, (draft: S) => {
@@ -69,7 +74,7 @@ export const createStore: CreateStore = <
         notifyStateListeners();
       }
 
-      await notifyEventListeners(event.type as E['type'], event);
+      notifyEventListeners(event.type as E['type'], event);
     },
 
     subscribe: (listener: (state: S) => void) => {
@@ -191,9 +196,7 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
         const { storeKey, event } = parsedData;
         const store = stores.get(storeKey as keyof TStores) as Store<any, typeof event> | undefined;
         if (store) {
-          store.dispatch(event).catch((err: Error) => {
-            console.error(`[Native Bridge] Error dispatching event from web message for store ${String(storeKey)}:`, err);
-          });
+          store.dispatch(event);
         }
         break;
       }

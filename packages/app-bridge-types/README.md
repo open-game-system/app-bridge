@@ -58,9 +58,9 @@ export interface Store<S extends State = State, E extends Event = Event> {
   /** Subscribe to state changes */
   subscribe(listener: (state: S) => void): () => void;
   /**
-   * Dispatch an event to the store. Returns a Promise that resolves when listeners complete.
+   * Dispatch an event to the store. Synchronously updates state and triggers listeners.
    */
-  dispatch(event: E): Promise<void>;
+  dispatch(event: E): void;
   /** Reset store to initial state */
   reset(): void;
   /**

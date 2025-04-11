@@ -107,10 +107,11 @@ interface Store<S extends State, E extends Event> {
   subscribe: (callback: (state: S) => void) => () => void;
 
   /**
-   * Dispatch an event to the store. Returns a Promise that resolves when configured
-   * and dynamic 'on' listeners for this event type have completed.
+   * Dispatch an event to the store. Synchronously updates the state via the producer
+   * and then triggers any configured or dynamic 'on' listeners for the event type.
+   * Async listeners are not awaited.
    */
-  dispatch: (event: E) => Promise<void>;
+  dispatch: (event: E) => void;
 
   /**
    * Reset store to its initial state

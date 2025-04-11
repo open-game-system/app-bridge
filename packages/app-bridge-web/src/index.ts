@@ -188,7 +188,7 @@ export function createWebBridge<
               listeners.delete(listener);
             };
           },
-          dispatch: (event: TStores[K]["events"]) => {
+          dispatch: async (event: TStores[K]["events"]): Promise<void> => {
             console.log(`[Web Bridge] Dispatching event for store ${String(storeKey)}:`, event);
             if (!window.ReactNativeWebView) {
               console.warn(
@@ -207,6 +207,18 @@ export function createWebBridge<
           reset: () => {
             // For web bridge, reset is a no-op since state is managed by native
             console.warn("[Web Bridge] Reset operation not supported in web bridge");
+          },
+          // Add 'on' method to satisfy the interface
+          on: <EventType extends TStores[K]["events"]['type']>(
+            eventType: EventType,
+            _listener: (
+              event: Extract<TStores[K]["events"], { type: EventType }>,
+              store: Store<TStores[K]["state"], TStores[K]["events"]>
+            ) => Promise<void> | void
+          ): (() => void) => {
+              console.warn(`[Web Bridge] store.on("${eventType}", ...) was called, but listeners added on the web side are not executed. Add listeners on the native side or via the store's 'on' config.`);
+              // Return a no-op unsubscribe function
+              return () => {};
           }
         };
         stores.set(storeKey, storeImpl);

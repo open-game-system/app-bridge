@@ -57,7 +57,7 @@ export interface Store<S extends State = State, E extends Event = Event> {
   /**
    * Dispatch an event to the store. Returns a Promise that resolves when listeners complete.
    */
-  dispatch(event: E): Promise<void>; // Added Promise return type
+  dispatch(event: E): void; // Revert to void return type
 
   /**
    * Subscribe to state changes
