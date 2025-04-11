@@ -36,6 +36,13 @@ export interface MockStore<TState extends State = State, TEvent extends Event = 
   reset: () => void;
   /** Set the store's complete state and notify listeners */
   setState: (state: TState) => void;
+  /**
+   * Add the 'on' method signature to satisfy the Store interface
+   */
+  on: <EventType extends TEvent['type']>(
+    eventType: EventType,
+    listener: (event: Extract<TEvent, { type: EventType }>, store: Store<TState, TEvent>) => Promise<void> | void
+  ) => () => void;
 }
 
 /**
@@ -170,237 +177,267 @@ export interface MockBridge<TStores extends BridgeStores>
 export function createMockBridge<TStores extends BridgeStores>(
   config: MockBridgeConfig<TStores> = {}
 ): MockBridge<TStores> {
-  // Store instances by key
-  const stores = new Map<
-    keyof TStores,
-    MockStore<TStores[keyof TStores]["state"], TStores[keyof TStores]["events"]>
-  >();
-
-  // Listeners for state changes by store key
-  const stateListeners = new Map<
-    keyof TStores,
-    Set<(state: TStores[keyof TStores]["state"]) => void>
-  >();
-
-  // Listeners for store availability changes
+  const stores = new Map<keyof TStores, MockStore<any, any>>();
+  const stateByStore = new Map<keyof TStores, TStores[keyof TStores]["state"]>();
+  const stateListeners = new Map<keyof TStores, Set<(state: any) => void>>();
   const storeListeners = new Set<() => void>();
-
-  // Event history for each store
-  const eventHistory = new Map<
-    keyof TStores,
-    TStores[keyof TStores]["events"][]
+  const eventHistory = new Map<keyof TStores, any[]>();
+  const eventListeners = new Map<
+      keyof TStores,
+      Map<string, Set<(event: any, store: Store<any, any>) => Promise<void> | void>>
   >();
 
-  // WebView tracking
   const webViews = new Set<WebView>();
   const readyWebViews = new Set<WebView>();
   const readyStateListeners = new Set<() => void>();
 
-  /**
-   * Notify all listeners for a specific store's state changes
-   */
-  const notifyStateListeners = <K extends keyof TStores>(storeKey: K) => {
+  const notifyStateListeners = (storeKey: keyof TStores) => {
     const listeners = stateListeners.get(storeKey);
-    const store = stores.get(storeKey);
-    if (listeners && store) {
-      const state = store.getSnapshot();
-      if (state) {
-        listeners.forEach((listener) => listener(state));
-      }
+    if (listeners && stateByStore.has(storeKey)) {
+      listeners.forEach((listener) => listener(stateByStore.get(storeKey)!));
     }
   };
 
-  /**
-   * Notify all listeners that a store's availability has changed
-   */
   const notifyStoreListeners = () => {
     storeListeners.forEach((listener) => listener());
   };
 
-  /**
-   * Notify all listeners that WebView ready state has changed
-   */
   const notifyReadyStateListeners = () => {
     readyStateListeners.forEach((listener) => listener());
   };
 
-  /**
-   * Create a new store for a specific key
-   * This is called when a store is explicitly created with state
-   */
-  const createStore = <K extends keyof TStores>(
-    storeKey: K,
-    initialState: TStores[K]["state"]
+  const notifyEventListeners = (
+      storeKey: keyof TStores,
+      eventType: string,
+      event: TStores[keyof TStores]["events"],
+      storeInstance: Store<any, any>
   ) => {
-    let currentState: TStores[K]["state"] = initialState;
+      const storeEventListeners = eventListeners.get(storeKey);
+      const listeners = storeEventListeners?.get(eventType);
+      if (listeners) {
+          listeners.forEach(listener => {
+              try {
+                  const result = listener(event, storeInstance);
+                  if (result instanceof Promise) {
+                      result.catch(error => {
+                          console.error(`[Mock Bridge] Unhandled promise rejection in async event listener for type "${eventType}" on store "${String(storeKey)}":`, error);
+                      });
+                  }
+              } catch (error) {
+                  console.error(`[Mock Bridge] Error in event listener for type "${eventType}" on store "${String(storeKey)}":`, error);
+              }
+          });
+      }
+  };
 
-    const store = {
-      /**
-       * Get the current state of the store
-       */
-      getSnapshot: () => {
-        return currentState;
+  const getOrCreateStore = <K extends keyof TStores>(
+    storeKey: K
+  ): MockStore<TStores[K]["state"], TStores[K]["events"]> => {
+    if (stores.has(storeKey)) {
+      return stores.get(storeKey)! as MockStore<TStores[K]["state"], TStores[K]["events"]>;
+    }
+
+    // Ensure state is tracked if not already
+    if (!stateByStore.has(storeKey) && config.initialState?.[storeKey]) {
+        stateByStore.set(storeKey, config.initialState[storeKey]!);
+    }
+
+    // Create the actual store object with all methods
+    const storeInstance: MockStore<TStores[K]["state"], TStores[K]["events"]> = {
+      getSnapshot: (): TStores[K]["state"] => {
+        // Provide initial state if current state is somehow undefined
+        return stateByStore.get(storeKey) ?? config.initialState?.[storeKey]!;
       },
 
-      /**
-       * Subscribe to state changes for this store
-       * Returns an unsubscribe function
-       */
-      subscribe: (listener: (state: TStores[K]["state"]) => void) => {
+      subscribe: (listener: (state: TStores[K]["state"]) => void): (() => void) => {
         if (!stateListeners.has(storeKey)) {
           stateListeners.set(storeKey, new Set());
         }
         const listeners = stateListeners.get(storeKey)!;
         listeners.add(listener);
-
-        // Notify immediately since state must exist
-        listener(currentState);
-
+        // Notify immediately with current state
+        if (stateByStore.has(storeKey)) {
+             listener(stateByStore.get(storeKey)!);
+        } else if (config.initialState?.[storeKey]) {
+             listener(config.initialState[storeKey]!);
+        }
         return () => {
           listeners.delete(listener);
         };
       },
 
-      /**
-       * Dispatch an event to the store
-       * In the mock implementation, this just records the event
-       */
-      dispatch: (event: TStores[K]["events"]) => {
+      // Mock dispatch only records history and notifies listeners
+      dispatch: (event: TStores[K]["events"]): void => { // Dispatch is void
         if (!eventHistory.has(storeKey)) {
           eventHistory.set(storeKey, []);
         }
         eventHistory.get(storeKey)!.push(event);
+        // Notify event listeners
+        notifyEventListeners(storeKey, event.type, event, storeInstance);
       },
 
-      /**
-       * Update the state using a producer function
-       * This allows for direct state manipulation in tests
-       */
-      produce: (producer: (state: TStores[K]["state"]) => void) => {
-        const newState = { ...currentState };
-        producer(newState);
-        currentState = newState;
-        notifyStateListeners(storeKey);
-      },
-
-      /**
-       * Reset the store to its initial state
-       * Also clears the event history
-       */
-      reset: () => {
-        const storeInitialState = config.initialState?.[storeKey];
-        if (storeInitialState) {
-          currentState = { ...storeInitialState };
+      produce: (producer: (state: TStores[K]["state"]) => void): void => {
+        let currentState = stateByStore.get(storeKey) ?? config.initialState?.[storeKey]!;
+        // Create a mutable copy for the producer
+        const draft = { ...currentState };
+        producer(draft);
+        // Check if state actually changed to avoid unnecessary notifications
+        if (JSON.stringify(draft) !== JSON.stringify(currentState)) {
+            stateByStore.set(storeKey, draft);
+            notifyStateListeners(storeKey);
         }
-        if (eventHistory.has(storeKey)) {
-          eventHistory.get(storeKey)!.length = 0;
+      },
+
+      reset: (): void => {
+        const initialStateForKey = config.initialState?.[storeKey];
+        if (initialStateForKey !== undefined) {
+             stateByStore.set(storeKey, initialStateForKey);
+             notifyStateListeners(storeKey);
+        } else {
+            stateByStore.delete(storeKey);
+            // Consider if stateListeners should be notified of deletion/undefined state
         }
-        notifyStateListeners(storeKey);
-        notifyStoreListeners();
+        // Clear history on reset
+        eventHistory.delete(storeKey);
       },
 
-      /**
-       * Directly set the state of the store
-       */
-      setState: (state: TStores[K]["state"]) => {
-        currentState = state;
+      setState: (state: TStores[K]["state"]): void => {
+        stateByStore.set(storeKey, state);
         notifyStateListeners(storeKey);
-        notifyStoreListeners();
       },
-    } as MockStore<TStores[K]["state"], TStores[K]["events"]>;
 
-    stores.set(storeKey, store);
-    return store;
+      // Implement the 'on' method for the mock store
+      on: <EventType extends TStores[K]["events"]['type']>(
+        eventType: EventType,
+        listener: (
+            event: Extract<TStores[K]["events"], { type: EventType }>,
+            store: Store<TStores[K]["state"], TStores[K]["events"]> // Use base Store type here
+        ) => Promise<void> | void
+      ): (() => void) => {
+        if (!eventListeners.has(storeKey)) {
+            eventListeners.set(storeKey, new Map());
+        }
+        const storeEventListeners = eventListeners.get(storeKey)!;
+        const eventTypeStr = eventType as string;
+
+        if (!storeEventListeners.has(eventTypeStr)) {
+            storeEventListeners.set(eventTypeStr, new Set());
+        }
+        const listenersForEvent = storeEventListeners.get(eventTypeStr)!;
+
+        // Cast listener type for storage
+        const typedListener = listener as (event: any, store: Store<any, any>) => Promise<void> | void;
+        listenersForEvent.add(typedListener);
+
+        return () => {
+            listenersForEvent.delete(typedListener);
+            // Clean up maps if sets become empty
+            if (listenersForEvent.size === 0) {
+                storeEventListeners.delete(eventTypeStr);
+            }
+            if (storeEventListeners.size === 0) {
+                eventListeners.delete(storeKey);
+            }
+        };
+      }
+    };
+
+    stores.set(storeKey, storeInstance);
+    return storeInstance;
   };
 
-  // Initialize stores with initial state if provided
+  // Initialize state tracking from config
   if (config.initialState) {
     for (const [key, state] of Object.entries(config.initialState)) {
-      createStore(key as keyof TStores, state);
+       if (state !== undefined) {
+         stateByStore.set(key as keyof TStores, state);
+       }
     }
   }
 
+  // Return the MockBridge object
   return {
-    /**
-     * Check if the bridge is supported
-     * In the mock implementation, this returns the configured value or true by default
-     */
     isSupported: () => config.isSupported ?? true,
 
-    /**
-     * Get a store by its key
-     * Returns undefined if the store doesn't exist
-     */
-    getStore: <K extends keyof TStores>(storeKey: K) => {
-      return stores.get(storeKey) as MockStore<TStores[K]["state"], TStores[K]["events"]> | undefined;
+    // Modify getStore to check for state before creating/returning
+    getStore: <K extends keyof TStores>(
+      storeKey: K
+    ): MockStore<TStores[K]["state"], TStores[K]["events"]> | undefined => {
+      // Only return a store if we actually have tracked state for it
+      if (!stateByStore.has(storeKey)) {
+        return undefined;
+      }
+      // If state exists, get or create the mock store instance
+      return getOrCreateStore(storeKey);
     },
 
-    /**
-     * Subscribe to store availability changes
-     * Returns an unsubscribe function
-     */
-    subscribe: (listener: () => void) => {
+    subscribe: (listener: () => void): (() => void) => {
       storeListeners.add(listener);
       return () => {
         storeListeners.delete(listener);
       };
     },
 
-    /**
-     * Get the event history for a specific store
-     * Creates an empty array if no events have been dispatched yet
-     */
-    getHistory: <K extends keyof TStores>(storeKey: K) => {
-      if (!eventHistory.has(storeKey)) {
-        eventHistory.set(storeKey, []);
-      }
-      return eventHistory.get(storeKey) as TStores[K]["events"][];
+    getHistory: <K extends keyof TStores>(storeKey: K): TStores[K]["events"][] => {
+      return (eventHistory.get(storeKey) as TStores[K]["events"][] | undefined) ?? [];
     },
 
-    /**
-     * Reset a store or all stores
-     */
-    reset: (storeKey?: keyof TStores) => {
-      if (storeKey) {
-        const store = stores.get(storeKey);
-        if (store) {
-          store.reset();
-        }
-        if (eventHistory.has(storeKey)) {
-          eventHistory.get(storeKey)!.length = 0;
-        }
-      } else {
-        // Reset all stores
-        stores.forEach((store) => {
-          store.reset();
-        });
-        eventHistory.forEach((history) => {
-          history.length = 0;
-        });
+    reset: (storeKey?: keyof TStores): void => {
+      const storeKeysToReset = storeKey ? [storeKey] : Array.from(stores.keys());
+      let availabilityChanged = false;
+      storeKeysToReset.forEach(key => {
+          const store = stores.get(key);
+          const hadStateBefore = stateByStore.has(key);
+          store?.reset(); // Calls mock store's reset which updates stateByStore
+          eventHistory.delete(key);
+          if (hadStateBefore && !stateByStore.has(key)) {
+              availabilityChanged = true; // Became unavailable
+          }
+      });
+      if (storeKey === undefined) { // Full reset
+          eventHistory.clear();
       }
-      notifyStoreListeners();
+      if (availabilityChanged) {
+          notifyStoreListeners();
+      }
     },
 
-    /**
-     * Set the state of a store
-     * Creates the store if it doesn't exist
-     */
     setState: <K extends keyof TStores>(
       storeKey: K,
       state: TStores[K]["state"]
-    ) => {
-      let store = stores.get(storeKey);
-      if (!store) {
-        store = createStore(storeKey, state);
+    ): void => {
+      const storeExisted = stateByStore.has(storeKey);
+      const store = getOrCreateStore(storeKey);
+      store.setState(state); // This updates stateByStore and notifies state listeners
+      // Notify store listeners ONLY if the store just became available
+      if (!storeExisted) {
         notifyStoreListeners();
-      } else {
-        store.setState(state);
       }
     },
 
-    /**
-     * Process a message received from the WebView
-     */
+    setStore: <K extends keyof TStores>(
+      key: K,
+      store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
+    ): void => {
+       const storeExisted = stateByStore.has(key);
+      if (store === undefined) {
+          stores.delete(key);
+          stateByStore.delete(key);
+          eventListeners.delete(key);
+          stateListeners.delete(key);
+          eventHistory.delete(key);
+          if (storeExisted) {
+              notifyStoreListeners(); // Notify became unavailable
+          }
+      } else {
+          stateByStore.set(key, store.getSnapshot());
+          getOrCreateStore(key); // Ensure mock store exists
+          if (!storeExisted) {
+              notifyStoreListeners(); // Notify became available
+          }
+      }
+    },
+
     handleWebMessage: (message: string | { nativeEvent: { data: string } }) => {
       const data = typeof message === 'string' ? message : message.nativeEvent.data;
       try {
@@ -422,9 +459,6 @@ export function createMockBridge<TStores extends BridgeStores>(
       }
     },
 
-    /**
-     * Register a WebView to receive state updates
-     */
     registerWebView: (webView: WebView) => {
       webViews.add(webView);
       return () => {
@@ -433,17 +467,11 @@ export function createMockBridge<TStores extends BridgeStores>(
       };
     },
 
-    /**
-     * Unregister a WebView from receiving state updates
-     */
     unregisterWebView: (webView: WebView) => {
       webViews.delete(webView);
       readyWebViews.delete(webView);
     },
 
-    /**
-     * Subscribe to WebView ready state changes
-     */
     onWebViewReady: (callback: () => void) => {
       readyStateListeners.add(callback);
       return () => {
@@ -451,25 +479,6 @@ export function createMockBridge<TStores extends BridgeStores>(
       };
     },
 
-    /**
-     * Check if any WebView is ready
-     */
     isWebViewReady: () => readyWebViews.size > 0,
-
-    /**
-     * Set or remove a store for a given key
-     */
-    setStore: <K extends keyof TStores>(
-      key: K,
-      store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
-    ) => {
-      if (store === undefined) {
-        stores.delete(key);
-      } else {
-        const mockStore = createStore(key, store.getSnapshot());
-        store.subscribe((state) => mockStore.setState(state));
-      }
-      notifyStoreListeners();
-    },
   };
 } 
