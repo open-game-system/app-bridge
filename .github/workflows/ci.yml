@@ -343,7 +343,55 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
-        npm publish --access public
+        
+        # Diagnostic logging to help troubleshoot 404 errors
+        echo "=== DIAGNOSING NPM PUBLISH ISSUE ==="
+        echo "Package directory: $(pwd)"
+        echo "Package JSON path: $(pwd)/package.json"
+        echo "Package exists: $(test -f package.json && echo 'Yes' || echo 'No')"
+        
+        echo "=== NPM CONFIGURATION ==="
+        echo "NPM version: $(npm --version)"
+        echo "Node version: $(node --version)"
+        echo "Registry URL: $(npm config get registry)"
+        echo "Current npm user:"
+        npm whoami || echo "Not logged in via npm whoami, but will try with NODE_AUTH_TOKEN"
+        
+        echo "=== PACKAGE DETAILS ==="
+        echo "Package name: $(node -p "require('./package.json').name")"
+        echo "Package version: $(node -p "require('./package.json').version")"
+        echo "Package access: $(node -p "require('./package.json').publishConfig?.access || 'not set'")"
+        
+        echo "=== NPM REGISTRY CHECK ==="
+        echo "Checking if scope exists:"
+        npm access ls-packages || echo "Unable to list packages, may need permissions"
+        echo "Checking if package exists on registry:"
+        npm view $(node -p "require('./package.json').name") || echo "Package not found on registry"
+        
+        echo "=== ATTEMPTING TO PUBLISH ==="
+        # Clear any npm cache that might be causing issues
+        npm cache clean --force
+        
+        # Ensure package.json has correct access level
+        node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('./package.json'));
+          if (!pkg.publishConfig) pkg.publishConfig = {};
+          pkg.publishConfig.access = 'public';
+          fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+          console.log('Updated publishConfig:', JSON.stringify(pkg.publishConfig, null, 2));
+        "
+        
+        # Try to create organization if it doesn't exist
+        npm org ls open-game-system 2>/dev/null || npm org create open-game-system "Open Game System" || echo "Could not create org, continuing anyway"
+        
+        # First attempt normal publish
+        npm publish --access public || {
+          echo "Standard publish failed, trying alternative approach"
+          # If that fails, try with @latest tag explicitly
+          npm publish --access public --tag latest
+        }
+        
         echo "NEW_VERSION=${{ steps.version.outputs.NEW_VERSION }}" >> $GITHUB_ENV
         echo "PACKAGE_NAME=${{ steps.version.outputs.PACKAGE_NAME }}" >> $GITHUB_ENV
         echo "PACKAGE_DIR=${{ steps.version.outputs.PACKAGE_DIR }}" >> $GITHUB_ENV
