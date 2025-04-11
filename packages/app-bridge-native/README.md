@@ -30,6 +30,9 @@ function createNativeBridge<TStores extends BridgeStores>(): NativeBridge<TStore
 function createStore<S extends State, E extends Event>(config: StoreConfig<S, E>): Store<S, E>;
 ```
 
+- **`config.producer`**: An optional function `(draft: S, event: E) => void` (compatible with Immer) that modifies the state based on dispatched events.
+- **`config.on`**: An optional object where keys are event types (`E['type']`) and values are listener functions `(event: E, store: Store<S, E>) => Promise<void> | void`. These listeners are executed *after* the producer updates the state for a given dispatched event. They can be async and have access to the store instance (e.g., to dispatch further events or read the latest state).
+
 ### NativeBridge Interface
 
 ```typescript
@@ -104,34 +107,43 @@ interface Store<S extends State, E extends Event> {
   subscribe: (callback: (state: S) => void) => () => void;
 
   /**
-   * Dispatch an event to the store
+   * Dispatch an event to the store. Returns a Promise that resolves when configured
+   * and dynamic 'on' listeners for this event type have completed.
    */
-  dispatch: (event: E) => void;
+  dispatch: (event: E) => Promise<void>;
 
   /**
    * Reset store to its initial state
    */
   reset: () => void;
+
+  /**
+   * Dynamically add a listener for a specific dispatched event type.
+   * Listeners can be async and receive the event object and the store instance.
+   * Returns an unsubscribe function.
+   */
+  on: <EventType extends E['type']>(
+    eventType: EventType,
+    listener: (event: Extract<E, { type: EventType }>, store: Store<S, E>) => Promise<void> | void
+  ) => () => void;
 }
 ```
 
 ## Usage Examples
 
-### Example 1: Store with Initial State
-
-In this example, we create a store with a known initial state and register it immediately:
+### Example 1: Store with `on` Config for Side Effects
 
 ```typescript
 import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
-import type { AppStores } from './types';
+import type { AppStores, CounterState, CounterEvents } from './types'; // Assuming types are defined
 
 function MyComponent() {
   const webViewRef = useRef<WebView>(null);
   const bridge = useMemo(() => createNativeBridge<AppStores>(), []);
 
-  // Create and register a store with initial state
+  // Create and register a store with initial state and declarative listeners
   useEffect(() => {
-    const store = createStore({
+    const store = createStore<CounterState, CounterEvents>({
       initialState: { value: 0 },
       producer: (draft, event) => {
         switch (event.type) {
@@ -139,14 +151,35 @@ function MyComponent() {
             draft.value += 1;
             break;
           case "DECREMENT":
-            draft.value -= 1;
+            if (draft.value > 0) draft.value -= 1;
             break;
         }
+      },
+      // Declarative listeners in config
+      on: {
+          INCREMENT: async (event, store) => {
+              console.log(`[Config] Incremented! New value: ${store.getSnapshot().value}`);
+              // Example: Dispatch another event after a delay
+              await new Promise(r => setTimeout(r, 500));
+              store.dispatch({ type: "LOG_UPDATE", value: store.getSnapshot().value }); // Assuming LOG_UPDATE exists
+          },
+          DECREMENT: (event, store) => {
+              console.log(`[Config] Decremented! New value: ${store.getSnapshot().value}`);
+          }
       }
     });
 
     bridge.setStore('counter', store);
-    return () => bridge.setStore('counter', undefined);
+
+    // Example: Adding a dynamic listener
+    const unsubscribeLog = store.on('LOG_UPDATE', (event) => {
+        console.log('[Dynamic] Logged update:', event.value);
+    });
+
+    return () => {
+        bridge.setStore('counter', undefined);
+        unsubscribeLog(); // Clean up dynamic listener
+    };
   }, [bridge]);
 
   // Register WebView
@@ -158,40 +191,35 @@ function MyComponent() {
   return (
     <WebView 
       ref={webViewRef}
-      onMessage={event => bridge.handleWebMessage(event)}
+      onMessage={event => bridge.handleWebMessage(event.nativeEvent.data)}
     />
   );
 }
 ```
 
-### Example 2: Complete React Context Integration
+### Example 2: Complete React Context Integration (Conceptual)
 
-Here's a complete example showing how to:
-1. Set up the bridge in context
-2. Create and manage stores
-3. Handle WebView communication
-4. Subscribe to store changes and ready state
+*(The structure remains largely the same as the previous example in the README, but highlights where the new `on` config and `store.on` method would fit)*
 
 ```typescript
-// types.ts
-import type { BridgeStores, State } from '@open-game-system/app-bridge-types';
+// types.ts - (Assume types defined as before)
+import type { BridgeStores, State, Event } from '@open-game-system/app-bridge-types';
 
-interface CounterState extends State {
-  value: number;
-}
+interface CounterState extends State { /* ... */ }
+interface LogState extends State { messages: string[] };
+type CounterEvents = { type: 'INCREMENT' } | { type: 'DECREMENT' };
+type LogEvents = { type: 'LOG'; message: string };
 
 export interface AppStores extends BridgeStores {
-  counter: {
-    state: CounterState;
-    events: { type: 'INCREMENT' } | { type: 'DECREMENT' };
-  };
+  counter: { state: CounterState; events: CounterEvents };
+  logger: { state: LogState; events: LogEvents };
 }
 
 // BridgeContext.tsx
-import React, { createContext, useContext, useRef, useEffect } from 'react';
-import { WebView } from 'react-native-webview';
+import React, { /* ... */ } from 'react';
+import { /* ... */ } from 'react-native';
 import { createNativeBridge, createStore } from '@open-game-system/app-bridge-native';
-import type { AppStores } from './types';
+import type { AppStores, CounterState, CounterEvents, LogState, LogEvents } from './types';
 
 const BridgeContext = createContext<ReturnType<typeof createNativeBridge<AppStores>> | null>(null);
 
@@ -200,23 +228,38 @@ export function BridgeProvider({ children }: { children: React.ReactNode }) {
   const bridge = useMemo(() => createNativeBridge<AppStores>(), []);
 
   useEffect(() => {
-    // Create and register the counter store
-    const store = createStore({
-      initialState: { value: 0 },
-      producer: (draft, event) => {
-        switch (event.type) {
-          case "INCREMENT":
-            draft.value += 1;
-            break;
-          case "DECREMENT":
-            draft.value -= 1;
-            break;
+    // Create logger store
+    const loggerStore = createStore<LogState, LogEvents>({
+        initialState: { messages: [] },
+        producer: (draft, event) => {
+            if (event.type === 'LOG') {
+                draft.messages.push(event.message);
+            }
         }
+    });
+
+    // Create counter store with 'on' config to dispatch to logger
+    const counterStore = createStore<CounterState, CounterEvents>({
+      initialState: { value: 0 },
+      producer: (draft, event) => { /* ... increment/decrement logic ... */ },
+      on: {
+          INCREMENT: (event, store) => {
+              // Dispatch to another store from listener
+              loggerStore.dispatch({ type: 'LOG', message: `Incremented to ${store.getSnapshot().value}` });
+          },
+          DECREMENT: (event, store) => {
+              loggerStore.dispatch({ type: 'LOG', message: `Decremented to ${store.getSnapshot().value}` });
+          }
       }
     });
 
-    bridge.setStore('counter', store);
-    return () => bridge.setStore('counter', undefined);
+    bridge.setStore('counter', counterStore);
+    bridge.setStore('logger', loggerStore);
+
+    return () => {
+        bridge.setStore('counter', undefined);
+        bridge.setStore('logger', undefined);
+    }
   }, [bridge]);
 
   useEffect(() => {
@@ -251,48 +294,8 @@ export function useBridge() {
   return bridge;
 }
 
-// Counter.tsx
-import React, { useEffect, useState } from 'react';
-import { View, Text, Button } from 'react-native';
-import { useBridge } from './BridgeContext';
-
-export function Counter() {
-  const bridge = useBridge();
-  const [count, setCount] = useState(0);
-  
-  useEffect(() => {
-    const store = bridge.getStore('counter');
-    if (!store) return;
-
-    // Initialize with current value
-    setCount(store.getSnapshot().value);
-
-    // Subscribe to changes
-    return store.subscribe((state) => {
-      setCount(state.value);
-    });
-  }, []);
-
-  const handleIncrement = () => {
-    const store = bridge.getStore('counter');
-    if (!store) return;
-    store.dispatch({ type: 'INCREMENT' });
-  };
-
-  const handleDecrement = () => {
-    const store = bridge.getStore('counter');
-    if (!store) return;
-    store.dispatch({ type: 'DECREMENT' });
-  };
-
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <Button title="-" onPress={handleDecrement} />
-      <Text style={{ marginHorizontal: 20 }}>{count}</Text>
-      <Button title="+" onPress={handleIncrement} />
-    </View>
-  );
-}
+// Counter.tsx / Logger.tsx (Components would use useBridge and store methods as before)
+// ... Example component implementations ...
 ```
 
 ## Important: WebView Message Handling

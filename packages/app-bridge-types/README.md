@@ -57,10 +57,20 @@ export interface Store<S extends State = State, E extends Event = Event> {
   getSnapshot(): S;
   /** Subscribe to state changes */
   subscribe(listener: (state: S) => void): () => void;
-  /** Dispatch an event to update the state */
-  dispatch(event: E): void;
+  /**
+   * Dispatch an event to the store. Returns a Promise that resolves when listeners complete.
+   */
+  dispatch(event: E): Promise<void>;
   /** Reset store to initial state */
   reset(): void;
+  /**
+   * Add a listener for specific dispatched events.
+   * Listeners can be async and receive the event and store instance.
+   * @param eventType The type of the dispatched event (E['type']).
+   * @param listener The callback function.
+   * @returns An unsubscribe function.
+   */
+  on(eventType: E['type'], listener: (event: E, store: Store<S, E>) => void): () => void;
 }
 
 /**
@@ -117,6 +127,15 @@ export type ExtractStoresType<T> = T extends {
 }
   ? U
   : never;
+
+/**
+ * Defines the configuration for declarative, potentially async event listeners
+ * within a store, triggered *after* state updates for a given dispatched event type.
+ * Listeners receive the event and the store instance.
+ */
+export type StoreOnConfig<S extends State, E extends Event> = Partial<{
+  [K in E['type']]: (event: Extract<E, { type: K }>, store: Store<S, E>) => void;
+}>;
 ```
 
 ## Usage Examples

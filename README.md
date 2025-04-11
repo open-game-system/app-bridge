@@ -135,19 +135,19 @@ function App() {
 
 ```typescript
 // 1. Import from the appropriate packages
-import type { AppStores } from "./shared/types";
+import type { AppStores, CounterState, CounterEvents } from "./shared/types"; // Ensure types are defined
 import {
   createNativeBridge,
   createStore,
 } from "@open-game-system/app-bridge-native";
 import { WebView } from "react-native-webview";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useSyncExternalStore, Text, Button } from "react"; // Add Button/Text imports
 
 // 2. Create the native bridge
 const bridge = createNativeBridge<AppStores>();
 
 // 3. Create and configure the counter store
-const counterStore = createStore({
+const counterStore = createStore<CounterState, CounterEvents>({
   initialState: { value: 0 },
   producer: (draft, event) => {
     switch (event.type) {
@@ -155,13 +155,19 @@ const counterStore = createStore({
         draft.value += 1;
         break;
       case "DECREMENT":
-        draft.value -= 1;
+         if (draft.value > 0) draft.value -= 1;
         break;
       case "SET":
         draft.value = event.value;
         break;
     }
   },
+  // Add optional declarative listener
+  on: {
+      INCREMENT: (event, store) => {
+          console.log(`[Store Config] Incremented. New value: ${store.getSnapshot().value}`);
+      }
+  }
 });
 
 // 4. Register the store with the bridge
@@ -172,25 +178,57 @@ function GameWebView() {
   const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
-    return bridge.registerWebView(webViewRef.current);
-  }, [webViewRef]);
+    // Register WebView and get cleanup function
+    const unregister = bridge.registerWebView(webViewRef.current);
+
+    // Optional: Add dynamic listener example
+    const unsubscribeSet = counterStore.on('SET', (event) => {
+        console.log(`[Dynamic Listener] Counter set to: ${event.value}`);
+    });
+
+    // Cleanup on unmount
+    return () => {
+        unregister();
+        unsubscribeSet();
+    };
+  }, [webViewRef]); // Dependency on ref is correct
 
   return (
     <>
       <WebView
         ref={webViewRef}
-        source={{ uri: "https://your-game-url.com" }}
-        onMessage={(event) => bridge.handleWebMessage(event)}
+        source={{ uri: "https://your-game-url.com" }} // Replace with actual URL/local server
+        onMessage={(event) => bridge.handleWebMessage(event.nativeEvent.data)} // Pass event.nativeEvent.data
       />
-      <Status />
+      {/* Add Example UI to interact with the store */}
+      <CounterControls />
+      <Status webViewRef={webViewRef} />
     </>
   );
 }
 
-const Status = () => {
+// Example controls to dispatch events to the store
+const CounterControls = () => {
+    const handleInc = () => counterStore.dispatch({ type: 'INCREMENT'});
+    const handleDec = () => counterStore.dispatch({ type: 'DECREMENT'});
+    const handleSet = () => counterStore.dispatch({ type: 'SET', value: 10 });
+
+    return (
+        <>
+            <Button title="Increment Native" onPress={handleInc} />
+            <Button title="Decrement Native" onPress={handleDec} />
+            <Button title="Set Native to 10" onPress={handleSet} />
+        </>
+    )
+}
+
+// Status component remains similar, but pass ref
+const Status = ({ webViewRef }: { webViewRef: React.RefObject<WebView> }) => {
+  // Hook requires webView instance, not just the ref object directly
   const isReady = useSyncExternalStore(
     (callback) => bridge.subscribeToReadyState(webViewRef.current, callback),
-    () => bridge.getReadyState(webViewRef.current)
+    () => bridge.getReadyState(webViewRef.current),
+    () => bridge.getReadyState(webViewRef.current) // Server snapshot
   );
 
   return <Text>Bridge Status: {isReady ? "Ready" : "Connecting..."}</Text>;
