@@ -1,6 +1,6 @@
 {
   "name": "@open-game-system/app-bridge-react-native",
-  "version": "0.20250411.0",
+  "version": "0.20250411.2",
   "description": "React Native specific hooks and components for @open-game-system/app-bridge",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
