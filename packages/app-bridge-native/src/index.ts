@@ -8,6 +8,7 @@ import type {
   StoreConfig,
   CreateStore,
   Producer,
+  NativeBridge,
 } from "@open-game-system/app-bridge-types";
 import { compare } from "fast-json-patch";
 import { produce } from "immer";
@@ -76,42 +77,7 @@ export const createStore: CreateStore = <S extends State, E extends Event>(
   };
 };
 
-// Define the native-specific bridge interface
-export interface NativeBridge<TStores extends BridgeStores>
-  extends Omit<Bridge<TStores>, 'isSupported'> {
-  /**
-   * Process a message received from the WebView
-   */
-  handleWebMessage: (
-    message: string | { nativeEvent: { data: string } }
-  ) => void;
-
-  /**
-   * Register a WebView to receive state updates
-   * Returns an unsubscribe function
-   */
-  registerWebView: (webView: WebView | null | undefined) => () => void;
-
-  /**
-   * Unregister a WebView from receiving state updates
-   */
-  unregisterWebView: (webView: WebView | null | undefined) => void;
-
-  /**
-   * Subscribe to ready state changes for a specific WebView
-   * Returns an unsubscribe function
-   */
-  subscribeToReadyState: (
-    webView: WebView | null | undefined,
-    callback: (isReady: boolean) => void
-  ) => () => void;
-
-  /**
-   * Get the current ready state for a specific WebView
-   */
-  getReadyState: (webView: WebView | null | undefined) => boolean;
-}
-
+// Return the imported NativeBridge type
 export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge<TStores> {
   const stores = new Map<keyof TStores, Store<any, any>>();
   const webViews = new Set<WebView>();
@@ -222,6 +188,8 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
   };
 
   return {
+    isSupported: () => true,
+    
     getStore: <K extends keyof TStores>(key: K) => {
       return stores.get(key) as Store<TStores[K]["state"], TStores[K]["events"]> | undefined;
     },
@@ -233,8 +201,9 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
       if (store === undefined) {
         stores.delete(key);
       } else {
+        let prevState = store.getSnapshot();
         stores.set(key, store);
-        // Send initial state to all ready WebViews
+
         readyWebViews.forEach(webView => {
           webView.postMessage(
             JSON.stringify({
@@ -245,15 +214,16 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
           );
         });
 
-        // Subscribe to store changes to broadcast updates
-        store.subscribe((state: TStores[K]["state"]) => {
-          const prevState = store.getSnapshot();
-          const operations = compare(prevState, state);
-          broadcastToWebViews({
-            type: "STATE_UPDATE",
-            storeKey: key,
-            operations,
-          });
+        store.subscribe((currentState: TStores[K]["state"]) => {
+          const operations = compare(prevState, currentState);
+          if (operations.length > 0) {
+            broadcastToWebViews({
+              type: "STATE_UPDATE",
+              storeKey: key,
+              operations,
+            });
+          }
+          prevState = currentState;
         });
       }
       notifyStoreListeners();

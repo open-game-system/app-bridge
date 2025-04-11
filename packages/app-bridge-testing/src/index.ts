@@ -1,15 +1,14 @@
+import type { WebView, State, Event } from '@open-game-system/app-bridge-types';
+
 /**
  * Base type for state objects
  */
-export type State = Record<string, any>;
+export type { State };
 
 /**
  * Base type for event objects
  */
-export type Event = {
-  type: string;
-  [key: string]: any;
-};
+export type { Event };
 
 /**
  * Store interface with standard methods
@@ -29,7 +28,7 @@ export type BridgeStores = Record<string, { state: State; events: Event }>;
  * Interface for a mock store that includes testing utilities.
  * This is only used in the mock bridge for testing purposes.
  */
-export interface MockStore<TState = any, TEvent = any>
+export interface MockStore<TState extends State = State, TEvent extends Event = Event>
   extends Store<TState, TEvent> {
   /** Directly modify the state using a producer function - only available in mock bridge */
   produce: (producer: (state: TState) => void) => void;
@@ -89,7 +88,7 @@ export interface Bridge<TStores extends BridgeStores = BridgeStores> {
  * @template TStores Store definitions for the bridge
  */
 export interface MockBridge<TStores extends BridgeStores>
-  extends Omit<Bridge<TStores>, "getSnapshot"> {
+  extends Bridge<TStores> {
   /**
    * Get a store by its key
    * Returns undefined if the store doesn't exist
@@ -123,6 +122,40 @@ export interface MockBridge<TStores extends BridgeStores>
    * Check if the bridge is supported
    */
   isSupported: () => boolean;
+
+  /**
+   * Process a message received from the WebView
+   */
+  handleWebMessage: (message: string | { nativeEvent: { data: string } }) => void;
+
+  /**
+   * Register a WebView to receive state updates
+   */
+  registerWebView: (webView: WebView) => () => void;
+
+  /**
+   * Unregister a WebView from receiving state updates
+   */
+  unregisterWebView: (webView: WebView) => void;
+
+  /**
+   * Subscribe to WebView ready state changes
+   * Returns an unsubscribe function
+   */
+  onWebViewReady: (callback: () => void) => () => void;
+
+  /**
+   * Check if any WebView is ready
+   */
+  isWebViewReady: () => boolean;
+
+  /**
+   * Set or remove a store for a given key
+   */
+  setStore: <K extends keyof TStores>(
+    key: K,
+    store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
+  ) => void;
 }
 
 /**
@@ -158,6 +191,11 @@ export function createMockBridge<TStores extends BridgeStores>(
     TStores[keyof TStores]["events"][]
   >();
 
+  // WebView tracking
+  const webViews = new Set<WebView>();
+  const readyWebViews = new Set<WebView>();
+  const readyStateListeners = new Set<() => void>();
+
   /**
    * Notify all listeners for a specific store's state changes
    */
@@ -177,6 +215,13 @@ export function createMockBridge<TStores extends BridgeStores>(
    */
   const notifyStoreListeners = () => {
     storeListeners.forEach((listener) => listener());
+  };
+
+  /**
+   * Notify all listeners that WebView ready state has changed
+   */
+  const notifyReadyStateListeners = () => {
+    readyStateListeners.forEach((listener) => listener());
   };
 
   /**
@@ -351,6 +396,80 @@ export function createMockBridge<TStores extends BridgeStores>(
       } else {
         store.setState(state);
       }
+    },
+
+    /**
+     * Process a message received from the WebView
+     */
+    handleWebMessage: (message: string | { nativeEvent: { data: string } }) => {
+      const data = typeof message === 'string' ? message : message.nativeEvent.data;
+      try {
+        const parsedMessage = JSON.parse(data);
+        if (parsedMessage.type === 'BRIDGE_READY') {
+          const webView = webViews.values().next().value;
+          if (webView) {
+            readyWebViews.add(webView);
+            notifyReadyStateListeners();
+          }
+        } else if (parsedMessage.type === 'EVENT') {
+          const store = stores.get(parsedMessage.storeKey as keyof TStores);
+          if (store) {
+            store.dispatch(parsedMessage.event);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse WebView message:', e);
+      }
+    },
+
+    /**
+     * Register a WebView to receive state updates
+     */
+    registerWebView: (webView: WebView) => {
+      webViews.add(webView);
+      return () => {
+        webViews.delete(webView);
+        readyWebViews.delete(webView);
+      };
+    },
+
+    /**
+     * Unregister a WebView from receiving state updates
+     */
+    unregisterWebView: (webView: WebView) => {
+      webViews.delete(webView);
+      readyWebViews.delete(webView);
+    },
+
+    /**
+     * Subscribe to WebView ready state changes
+     */
+    onWebViewReady: (callback: () => void) => {
+      readyStateListeners.add(callback);
+      return () => {
+        readyStateListeners.delete(callback);
+      };
+    },
+
+    /**
+     * Check if any WebView is ready
+     */
+    isWebViewReady: () => readyWebViews.size > 0,
+
+    /**
+     * Set or remove a store for a given key
+     */
+    setStore: <K extends keyof TStores>(
+      key: K,
+      store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
+    ) => {
+      if (store === undefined) {
+        stores.delete(key);
+      } else {
+        const mockStore = createStore(key, store.getSnapshot());
+        store.subscribe((state) => mockStore.setState(state));
+      }
+      notifyStoreListeners();
     },
   };
 } 

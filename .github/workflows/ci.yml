@@ -53,7 +53,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        package: [types, web, native, react, testing]
+        package: [types, web, native, react, react-native, testing]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -169,35 +169,51 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
-        # Try to publish, if it fails with 409, try incrementing patch and retrying
         MAX_RETRIES=5
         RETRY_COUNT=0
         VERSION=${{ steps.version.outputs.DEV_VERSION }}
+        OUTPUT_FILE="npm_publish_output.log"
+        
+        echo "Initial version to try: ${VERSION}"
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-          if npm publish --tag dev; then
+          echo "--- Attempt ${RETRY_COUNT} --- Trying to publish ${VERSION} ---"
+          # Capture both stdout and stderr to a file
+          npm publish --tag dev > "$OUTPUT_FILE" 2>&1
+          ERROR_CODE=$?
+          
+          if [ $ERROR_CODE -eq 0 ]; then
             echo "Successfully published ${VERSION}"
-            break
-          else
-            ERROR_CODE=$?
-            if [ $ERROR_CODE -eq 409 ]; then
-              # Extract current patch number and increment
-              CURRENT_PATCH=$(echo $VERSION | sed -n 's/.*\.\([0-9]\+\)-pr.*/\1/p')
-              NEXT_PATCH=$((CURRENT_PATCH + 1))
-              VERSION=$(echo $VERSION | sed "s/\.[0-9]\+-pr/\.${NEXT_PATCH}-pr/")
-              
-              echo "Version conflict, trying with incremented patch: ${VERSION}"
-              npm version $VERSION --no-git-tag-version --allow-same-version
-              RETRY_COUNT=$((RETRY_COUNT + 1))
-            else
-              echo "Failed to publish with error code: ${ERROR_CODE}"
-              exit $ERROR_CODE
-            fi
+            cat "$OUTPUT_FILE"
+            break # Success!
           fi
+          
+          # --- Failure Handling (Simplified) ---
+          echo "Publish failed with exit code ${ERROR_CODE}. Assuming potential conflict and retrying with next patch."
+          cat "$OUTPUT_FILE" # Log the output from the failed attempt
+          
+          # Increment Patch Version regardless of the specific error
+          CURRENT_PATCH=$(echo $VERSION | sed -n 's/.*\.\([0-9]\+\)-pr.*/\1/p')
+          if [ -z "$CURRENT_PATCH" ]; then
+            echo "Error: Could not extract patch number from version ${VERSION}. Cannot retry."
+            exit 1
+          fi
+          NEXT_PATCH=$((CURRENT_PATCH + 1))
+          VERSION=$(echo $VERSION | sed "s/\.[0-9]\+-pr/\.${NEXT_PATCH}-pr/")
+          
+          echo "Incrementing version for retry: ${VERSION}"
+          # Update package.json version (capture output in case it fails)
+          npm version $VERSION --no-git-tag-version --allow-same-version >> "$OUTPUT_FILE" 2>&1
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+          
+          # Optional: Add a small delay before retrying?
+          # sleep 2 
         done
         
         if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-          echo "Failed to publish after ${MAX_RETRIES} retries"
+          echo "Failed to publish after ${MAX_RETRIES} retries."
+          echo "Final attempt output for version ${VERSION}:"
+          cat "$OUTPUT_FILE"
           exit 1
         fi
 
@@ -228,7 +244,7 @@ jobs:
       packages: write # Needed to publish to npm
     strategy:
       matrix:
-        package: [types, web, native, react, testing]
+        package: [types, web, native, react, react-native, testing]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -353,7 +369,7 @@ jobs:
     - name: Update Package Versions and Commit
       run: |
         # Define all packages to check
-        PACKAGES=("types" "web" "native" "react" "testing")
+        PACKAGES=("types" "web" "native" "react" "react-native" "testing")
         
         # Flag to track if any changes were made
         CHANGES_MADE=false

@@ -7,7 +7,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react",
+    "jsx": "react-native",
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*"],
@@ -15,13 +15,13 @@
       "@open-game-system/app-bridge/native": ["../../packages/app-bridge/src/native"],
       "@open-game-system/app-bridge/react": ["../../packages/app-bridge/src/react"]
     },
-    "types": ["react", "jest", "node"],
+    "types": ["jest", "react-native", "@testing-library/react-native"],
     "allowJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "target": "esnext",
     "lib": ["esnext", "dom"]
   },
-  "include": ["App.tsx", "index.js", "globals.d.ts"],
+  "include": ["App.tsx", "index.js", "globals.d.ts", "__tests__/**/*.tsx"],
   "exclude": ["node_modules"]
 }

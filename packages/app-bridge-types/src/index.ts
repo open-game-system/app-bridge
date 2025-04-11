@@ -122,33 +122,28 @@ export interface WebView {
 }
 
 /**
- * Base bridge interface that all implementations extend
+ * Base bridge interface - applicable to both web and native contexts
+ * NOTE: isSupported is primarily for the web context.
  */
 export interface Bridge<TStores extends BridgeStores> {
   /**
-   * Check if the bridge is supported in the current environment
+   * Check if the bridge environment (e.g., ReactNativeWebView) is available.
+   * Returns true on native by default, checks for WebView on web.
    */
-  isSupported: () => boolean;
+  isSupported: () => boolean; // Keep for base, native impl can just return true
 
-  /**
-   * Get a store by its key
-   * Returns undefined if the store doesn't exist
-   */
   getStore: <K extends keyof TStores>(
     storeKey: K
   ) => Store<TStores[K]["state"], TStores[K]["events"]> | undefined;
 
-  /**
-   * Set or remove a store for a given key
-   */
   setStore: <K extends keyof TStores>(
     key: K,
     store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
   ) => void;
 
   /**
-   * Subscribe to store availability changes
-   * Returns an unsubscribe function
+   * Subscribe to general bridge events (like store registration/unregistration).
+   * Returns an unsubscribe function.
    */
   subscribe: (listener: () => void) => () => void;
 }
@@ -174,32 +169,39 @@ export type NativeToWebMessage<TStores extends BridgeStores> =
     };
 
 /**
- * Native bridge interface with additional capabilities
+ * Native bridge interface with additional capabilities specific to the native side.
  */
 export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStores> {
+  // isSupported is inherited, native impl should return true.
+  
   /**
-   * Process a message received from the WebView
+   * Process a message received from a WebView.
    */
   handleWebMessage: (message: string | { nativeEvent: { data: string } }) => void;
 
   /**
-   * Register a WebView to receive state updates
+   * Register a WebView instance to sync state with.
+   * Returns an unsubscribe/cleanup function.
    */
-  registerWebView: (webView: WebView) => () => void;
+  registerWebView: (webView: WebView | null | undefined) => () => void;
 
   /**
-   * Unregister a WebView from receiving state updates
+   * Unregister a WebView instance.
    */
-  unregisterWebView: (webView: WebView) => void;
+  unregisterWebView: (webView: WebView | null | undefined) => void;
 
   /**
-   * Subscribe to WebView ready state changes
-   * Returns an unsubscribe function
+   * Subscribe to ready state changes for a specific WebView.
+   * The callback receives true when the WebView sends BRIDGE_READY.
+   * Returns an unsubscribe function.
    */
-  onWebViewReady: (callback: () => void) => () => void;
+  subscribeToReadyState: ( 
+    webView: WebView | null | undefined, 
+    callback: (isReady: boolean) => void
+  ) => () => void;
 
   /**
-   * Check if any WebView is ready
+   * Get the current ready state for a specific WebView.
    */
-  isWebViewReady: () => boolean;
+  getReadyState: (webView: WebView | null | undefined) => boolean;
 }
