@@ -93,4 +93,12 @@ pnpm-debug.log*
 !.vscode/workspace.code-workspace
 
 # Turbo
-.turbo 
+.turbo
+
+# Stryker
+.stryker-tmp/
+.stryker-incremental.json
+reports/
+
+# Swarm
+.swarm/

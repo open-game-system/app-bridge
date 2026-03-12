@@ -4,16 +4,22 @@
     "lint": {
       "outputs": []
     },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["build"],
       "inputs": ["**/*.{ts,tsx,js,jsx}"]
     },
+    "test:coverage": {
+      "dependsOn": ["build"],
+      "inputs": ["**/*.{ts,tsx,js,jsx}"],
+      "outputs": ["coverage/**"]
+    },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [
-        "dist/**",
-        "node_modules/.cache/metro/**"
-      ]
+      "outputs": ["dist/**", "node_modules/.cache/metro/**"]
     },
     "dev": {
       "cache": false,

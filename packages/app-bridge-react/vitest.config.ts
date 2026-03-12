@@ -7,11 +7,11 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "json", "html"],
+      reporter: ["text", "json", "html", "lcov"],
     },
     deps: {
       inline: ["@testing-library/react", "@testing-library/jest-dom"],
     },
     setupFiles: ["src/test/setup.ts"],
   },
-}); 
+});
