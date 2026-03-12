@@ -308,4 +308,97 @@ describe("createStore", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("should not call subscribe listeners when dispatching without a producer", () => {
+    // Kills mutants: L62 (stateChanged=false→true), L63 (config.producer→true), L73 (stateChanged→true)
+    const store = createStore<TestState, TestEvents>({ initialState });
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    // listener called once immediately by subscribe
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // dispatch without producer should NOT trigger state listeners again
+    store.dispatch({ type: "INCREMENT", amount: 1 });
+    expect(listener).toHaveBeenCalledTimes(1);
+    // state should remain unchanged
+    expect(store.getSnapshot()).toEqual(initialState);
+  });
+
+  it("should not notify state listeners when producer returns identical state", () => {
+    // Kills mutant: L67 (nextState !== currentState → true)
+    // Create a producer that explicitly does nothing for a certain event
+    const noopProducer = (draft: TestState, event: TestEvents) => {
+      if (event.type === "INCREMENT") {
+        draft.count += event.amount;
+      }
+      // DECREMENT intentionally does nothing — no draft mutation
+    };
+    const store = createStore<TestState, TestEvents>({ initialState, producer: noopProducer });
+    const listener = vi.fn();
+    store.subscribe(listener);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // Dispatch event that doesn't modify draft → immer returns same reference
+    store.dispatch({ type: "DECREMENT" });
+    expect(listener).toHaveBeenCalledTimes(1); // NOT called again
+
+    // Verify dispatch that DOES change state still notifies
+    store.dispatch({ type: "INCREMENT", amount: 1 });
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(store.getSnapshot().count).toBe(1);
+  });
+
+  it("should not log errors when sync event listeners succeed", () => {
+    // Kills mutant: L46 (result instanceof Promise → true)
+    // If mutated, calling .catch() on undefined (sync return) throws TypeError
+    const syncListener = vi.fn();
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const store = createStore<TestState, TestEvents>({
+      initialState,
+      producer: testProducer,
+      on: {
+        INCREMENT: syncListener,
+      },
+    });
+
+    store.dispatch({ type: "INCREMENT", amount: 1 });
+
+    expect(syncListener).toHaveBeenCalledTimes(1);
+    // No errors should be logged for a successful sync listener
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("should clean up event listener map entry when last listener unsubscribes", () => {
+    // Kills mutants: L102 (listeners.size === 0 → true/false/!==0, block → {})
+    const store = createStore<TestState, TestEvents>({ initialState, producer: testProducer });
+    const listener1 = vi.fn();
+    const listener2 = vi.fn();
+
+    const unsub1 = store.on("INCREMENT", listener1);
+    const unsub2 = store.on("INCREMENT", listener2);
+
+    store.dispatch({ type: "INCREMENT", amount: 1 });
+    expect(listener1).toHaveBeenCalledTimes(1);
+    expect(listener2).toHaveBeenCalledTimes(1);
+
+    // Remove first listener — event type still has listener2
+    unsub1();
+    store.dispatch({ type: "INCREMENT", amount: 1 });
+    expect(listener1).toHaveBeenCalledTimes(1); // not called again
+    expect(listener2).toHaveBeenCalledTimes(2);
+
+    // Remove second listener — event type has no listeners
+    unsub2();
+    // Re-add a listener for same event type. If the Map entry wasn't cleaned up
+    // and the mutant replaced `listeners.size === 0` with `true`, the map entry
+    // would have been deleted while listener2 was still in it.
+    const listener3 = vi.fn();
+    store.on("INCREMENT", listener3);
+    store.dispatch({ type: "INCREMENT", amount: 1 });
+    expect(listener3).toHaveBeenCalledTimes(1);
+  });
 });

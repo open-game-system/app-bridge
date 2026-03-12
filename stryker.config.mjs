@@ -2,16 +2,11 @@
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   testRunner: "vitest",
-  checkers: ["typescript"],
-  tpiConfig: {
-    coreModules: {
-      "@stryker-mutator/vitest-runner": true,
-      "@stryker-mutator/typescript-checker": true,
-    },
-  },
-  vitest: {
-    configFile: "vitest.workspace.ts",
-  },
+  checkers: [],
+  plugins: [
+    "@stryker-mutator/vitest-runner",
+  ],
+  vitest: {},
   mutate: [
     "packages/app-bridge-web/src/**/*.ts",
     "packages/app-bridge-native/src/**/*.ts",
