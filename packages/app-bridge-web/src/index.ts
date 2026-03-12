@@ -25,6 +25,9 @@ export type NativeToWebMessage<TStores extends BridgeStores = BridgeStores> = {
   storeKey: keyof TStores;
   data?: TStores[keyof TStores]["state"];
   operations?: Operation[];
+} | {
+  type: "SET_DEVICE_ID";
+  ogsDeviceId: string | null;
 };
 
 export interface WebViewBridge {
@@ -47,6 +50,10 @@ declare global {
 export function createWebBridge<
   TStores extends BridgeStores
 >(): Bridge<TStores> {
+  // OGS Device ID
+  let currentOgsDeviceId: string | null = null;
+  const ogsDeviceIdListeners = new Set<(deviceId: string | null) => void>();
+
   // Internal state storage
   const stateByStore = new Map<
     keyof TStores,
@@ -108,6 +115,9 @@ export function createWebBridge<
           }
           notifyStateListeners(message.storeKey as keyof TStores);
           notifyStoreListeners();
+        } else if (message.type === "SET_DEVICE_ID") {
+          currentOgsDeviceId = message.ogsDeviceId;
+          ogsDeviceIdListeners.forEach((listener) => listener(currentOgsDeviceId));
         } else if (message.type === "STATE_UPDATE") {
           // console.log(`[Web Bridge] Handling STATE_UPDATE for store '${String(message.storeKey)}'`, message.operations); // Log update handling
           if (message.data === null) {
@@ -152,6 +162,17 @@ export function createWebBridge<
      */
     isSupported: () =>
       typeof window !== "undefined" && !!window.ReactNativeWebView,
+
+    get ogsDeviceId() {
+      return currentOgsDeviceId;
+    },
+
+    subscribeToOgsDeviceId: (listener: (deviceId: string | null) => void) => {
+      ogsDeviceIdListeners.add(listener);
+      return () => {
+        ogsDeviceIdListeners.delete(listener);
+      };
+    },
 
     /**
      * Get a store by its key

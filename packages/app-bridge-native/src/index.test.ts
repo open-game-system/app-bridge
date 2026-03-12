@@ -114,6 +114,73 @@ describe("NativeBridge", () => {
     });
   });
 
+  describe("ogsDeviceId", () => {
+    test("starts with null ogsDeviceId", () => {
+      expect(bridge.ogsDeviceId).toBeNull();
+    });
+
+    test("sets and gets ogsDeviceId", () => {
+      bridge.setOgsDeviceId("device-abc-123");
+      expect(bridge.ogsDeviceId).toBe("device-abc-123");
+    });
+
+    test("notifies subscribers when ogsDeviceId changes", () => {
+      const listener = vi.fn();
+      bridge.subscribeToOgsDeviceId(listener);
+
+      bridge.setOgsDeviceId("device-xyz-789");
+      expect(listener).toHaveBeenCalledWith("device-xyz-789");
+    });
+
+    test("allows unsubscribing from ogsDeviceId changes", () => {
+      const listener = vi.fn();
+      const unsubscribe = bridge.subscribeToOgsDeviceId(listener);
+
+      unsubscribe();
+
+      bridge.setOgsDeviceId("device-xyz-789");
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    test("broadcasts ogsDeviceId to registered WebViews", () => {
+      bridge.registerWebView(mockWebView);
+      mockWebView.messageQueue = [];
+
+      bridge.setOgsDeviceId("device-broadcast-123");
+
+      expect(mockWebView.messageQueue.length).toBe(1);
+      const message = JSON.parse(mockWebView.messageQueue[0]);
+      expect(message.type).toBe("SET_DEVICE_ID");
+      expect(message.ogsDeviceId).toBe("device-broadcast-123");
+    });
+
+    test("sends ogsDeviceId to WebView on BRIDGE_READY", () => {
+      bridge.setOgsDeviceId("device-ready-456");
+      bridge.registerWebView(mockWebView);
+      mockWebView.messageQueue = [];
+
+      bridge.handleWebMessage(
+        JSON.stringify({ type: "BRIDGE_READY" })
+      );
+
+      // Find the SET_DEVICE_ID message among the messages sent
+      const deviceIdMessages = mockWebView.messageQueue
+        .map((m) => JSON.parse(m))
+        .filter((m: any) => m.type === "SET_DEVICE_ID");
+
+      expect(deviceIdMessages.length).toBe(1);
+      expect(deviceIdMessages[0].ogsDeviceId).toBe("device-ready-456");
+    });
+
+    test("handles setting ogsDeviceId to null", () => {
+      bridge.setOgsDeviceId("device-abc");
+      expect(bridge.ogsDeviceId).toBe("device-abc");
+
+      bridge.setOgsDeviceId(null);
+      expect(bridge.ogsDeviceId).toBeNull();
+    });
+  });
+
   describe("WebView Integration", () => {
     test("handles WebView registration with null value", () => {
       const unsubscribe = bridge.registerWebView(null);

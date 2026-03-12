@@ -88,6 +88,18 @@ export interface Bridge<TStores extends BridgeStores = BridgeStores> {
    * Returns an unsubscribe function
    */
   subscribe: (listener: () => void) => () => void;
+
+  /**
+   * Get the current OGS device ID
+   * Returns null if the device ID has not been set
+   */
+  ogsDeviceId: string | null;
+
+  /**
+   * Subscribe to changes in the OGS device ID
+   * Returns an unsubscribe function
+   */
+  subscribeToOgsDeviceId: (listener: (deviceId: string | null) => void) => () => void;
 }
 
 /**
@@ -163,6 +175,11 @@ export interface MockBridge<TStores extends BridgeStores>
     key: K,
     store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
   ) => void;
+
+  /**
+   * Set the OGS device ID
+   */
+  setOgsDeviceId: (deviceId: string | null) => void;
 }
 
 /**
@@ -190,6 +207,10 @@ export function createMockBridge<TStores extends BridgeStores>(
   const webViews = new Set<WebView>();
   const readyWebViews = new Set<WebView>();
   const readyStateListeners = new Set<() => void>();
+
+  // OGS Device ID
+  let currentOgsDeviceId: string | null = null;
+  const ogsDeviceIdListeners = new Set<(deviceId: string | null) => void>();
 
   const notifyStateListeners = (storeKey: keyof TStores) => {
     const listeners = stateListeners.get(storeKey);
@@ -358,6 +379,22 @@ export function createMockBridge<TStores extends BridgeStores>(
   // Return the MockBridge object
   return {
     isSupported: () => config.isSupported ?? true,
+
+    get ogsDeviceId() {
+      return currentOgsDeviceId;
+    },
+
+    subscribeToOgsDeviceId: (listener: (deviceId: string | null) => void) => {
+      ogsDeviceIdListeners.add(listener);
+      return () => {
+        ogsDeviceIdListeners.delete(listener);
+      };
+    },
+
+    setOgsDeviceId: (deviceId: string | null) => {
+      currentOgsDeviceId = deviceId;
+      ogsDeviceIdListeners.forEach((l) => l(currentOgsDeviceId));
+    },
 
     // Modify getStore to check for state before creating/returning
     getStore: <K extends keyof TStores>(

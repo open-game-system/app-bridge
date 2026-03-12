@@ -183,6 +183,48 @@ describe("createMockBridge", () => {
     expect(unsupportedBridge.isSupported()).toBe(false);
   });
 
+  describe("ogsDeviceId", () => {
+    it("should start with null ogsDeviceId", () => {
+      const bridge = createMockBridge<TestStores>();
+      expect(bridge.ogsDeviceId).toBeNull();
+    });
+
+    it("should set and get ogsDeviceId", () => {
+      const bridge = createMockBridge<TestStores>();
+      bridge.setOgsDeviceId("mock-device-123");
+      expect(bridge.ogsDeviceId).toBe("mock-device-123");
+    });
+
+    it("should notify subscribers when ogsDeviceId changes", () => {
+      const bridge = createMockBridge<TestStores>();
+      const listener = vi.fn();
+      bridge.subscribeToOgsDeviceId(listener);
+
+      bridge.setOgsDeviceId("mock-device-456");
+      expect(listener).toHaveBeenCalledWith("mock-device-456");
+    });
+
+    it("should allow unsubscribing from ogsDeviceId changes", () => {
+      const bridge = createMockBridge<TestStores>();
+      const listener = vi.fn();
+      const unsubscribe = bridge.subscribeToOgsDeviceId(listener);
+
+      unsubscribe();
+
+      bridge.setOgsDeviceId("mock-device-789");
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("should handle setting ogsDeviceId to null", () => {
+      const bridge = createMockBridge<TestStores>();
+      bridge.setOgsDeviceId("mock-device-123");
+      expect(bridge.ogsDeviceId).toBe("mock-device-123");
+
+      bridge.setOgsDeviceId(null);
+      expect(bridge.ogsDeviceId).toBeNull();
+    });
+  });
+
   describe("store availability", () => {
     it("should return undefined for unavailable stores", () => {
       const bridge = createMockBridge<TestStores>({

@@ -343,6 +343,85 @@ describe('Web Bridge', () => {
     });
   });
 
+  describe('ogsDeviceId', () => {
+    it('starts with null ogsDeviceId', () => {
+      expect(bridge.ogsDeviceId).toBeNull();
+    });
+
+    it('updates ogsDeviceId when receiving SET_DEVICE_ID message', () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'SET_DEVICE_ID',
+            ogsDeviceId: 'test-device-123'
+          })
+        })
+      );
+
+      expect(bridge.ogsDeviceId).toBe('test-device-123');
+    });
+
+    it('notifies subscribers when ogsDeviceId changes', () => {
+      const listener = vi.fn();
+      bridge.subscribeToOgsDeviceId(listener);
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'SET_DEVICE_ID',
+            ogsDeviceId: 'test-device-456'
+          })
+        })
+      );
+
+      expect(listener).toHaveBeenCalledWith('test-device-456');
+    });
+
+    it('allows unsubscribing from ogsDeviceId changes', () => {
+      const listener = vi.fn();
+      const unsubscribe = bridge.subscribeToOgsDeviceId(listener);
+
+      unsubscribe();
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'SET_DEVICE_ID',
+            ogsDeviceId: 'test-device-789'
+          })
+        })
+      );
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('handles setting ogsDeviceId to null', () => {
+      // First set a device ID
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'SET_DEVICE_ID',
+            ogsDeviceId: 'test-device-123'
+          })
+        })
+      );
+
+      expect(bridge.ogsDeviceId).toBe('test-device-123');
+
+      // Then set it to null
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'SET_DEVICE_ID',
+            ogsDeviceId: null
+          })
+        })
+      );
+
+      expect(bridge.ogsDeviceId).toBeNull();
+    });
+  });
+
   describe('error handling', () => {
     it('handles invalid message data gracefully', () => {
       // Send invalid JSON

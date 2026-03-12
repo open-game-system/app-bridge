@@ -135,6 +135,10 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
   const readyStateListeners = new Map<BridgeWebView, Set<(isReady: boolean) => void>>();
   const storeListeners = new Set<() => void>();
 
+  // OGS Device ID
+  let currentOgsDeviceId: string | null = null;
+  const ogsDeviceIdListeners = new Set<(deviceId: string | null) => void>();
+
   const notifyStoreListeners = () => {
     storeListeners.forEach(listener => listener());
   };
@@ -189,6 +193,14 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
                 });
                 if (webView.postMessage) webView.postMessage(initMessage);
             });
+            // Send current device ID to the newly ready WebView
+            if (currentOgsDeviceId !== null) {
+                const deviceIdMessage = JSON.stringify({
+                    type: "SET_DEVICE_ID",
+                    ogsDeviceId: currentOgsDeviceId,
+                });
+                if (webView.postMessage) webView.postMessage(deviceIdMessage);
+            }
         });
         break;
       }
@@ -205,6 +217,26 @@ export function createNativeBridge<TStores extends BridgeStores>(): NativeBridge
 
   return {
     isSupported: () => true,
+
+    get ogsDeviceId() {
+      return currentOgsDeviceId;
+    },
+
+    subscribeToOgsDeviceId: (listener: (deviceId: string | null) => void) => {
+      ogsDeviceIdListeners.add(listener);
+      return () => {
+        ogsDeviceIdListeners.delete(listener);
+      };
+    },
+
+    setOgsDeviceId: (deviceId: string | null) => {
+      currentOgsDeviceId = deviceId;
+      ogsDeviceIdListeners.forEach((l) => l(currentOgsDeviceId));
+      broadcastToWebViews({
+        type: "SET_DEVICE_ID",
+        ogsDeviceId: currentOgsDeviceId,
+      });
+    },
 
     getStore: <K extends keyof TStores>(key: K) => {
       return stores.get(key) as Store<TStores[K]["state"], TStores[K]["events"]> | undefined;

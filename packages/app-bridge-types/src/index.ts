@@ -155,6 +155,18 @@ export interface Bridge<TStores extends BridgeStores> {
     store: Store<TStores[K]["state"], TStores[K]["events"]> | undefined
   ) => void;
   subscribe: (listener: () => void) => () => void;
+
+  /**
+   * Get the current OGS device ID
+   * Returns null if the device ID has not been set
+   */
+  ogsDeviceId: string | null;
+
+  /**
+   * Subscribe to changes in the OGS device ID
+   * Returns an unsubscribe function
+   */
+  subscribeToOgsDeviceId: (listener: (deviceId: string | null) => void) => () => void;
 }
 
 /**
@@ -175,6 +187,10 @@ export type NativeToWebMessage<TStores extends BridgeStores> =
       storeKey: keyof TStores;
       data?: TStores[keyof TStores]["state"];
       operations?: Operation[];
+    }
+  | {
+      type: "SET_DEVICE_ID";
+      ogsDeviceId: string | null;
     };
 
 /**
@@ -189,4 +205,9 @@ export interface NativeBridge<TStores extends BridgeStores> extends Bridge<TStor
     callback: (isReady: boolean) => void
   ) => () => void;
   getReadyState: (webView: WebView | null | undefined) => boolean;
+
+  /**
+   * Set the OGS device ID and broadcast it to all registered WebViews
+   */
+  setOgsDeviceId: (deviceId: string | null) => void;
 }
