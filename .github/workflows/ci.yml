@@ -179,8 +179,8 @@ jobs:
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
           echo "--- Attempt ${RETRY_COUNT} --- Trying to publish ${VERSION} ---"
           # Capture both stdout and stderr to a file
-          npm publish --tag dev > "$OUTPUT_FILE" 2>&1
-          ERROR_CODE=$?
+          # Use || true to prevent set -e from killing the retry loop
+          npm publish --tag dev > "$OUTPUT_FILE" 2>&1 && ERROR_CODE=0 || ERROR_CODE=$?
           
           if [ $ERROR_CODE -eq 0 ]; then
             echo "Successfully published ${VERSION}"
