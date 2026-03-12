@@ -8,10 +8,7 @@ interface CounterState extends State {
 }
 
 // Discriminated union for events
-type CounterEvents =
-  | { type: "INCREMENT" }
-  | { type: "DECREMENT" }
-  | { type: "SET"; value: number };
+type CounterEvents = { type: "INCREMENT" } | { type: "DECREMENT" } | { type: "SET"; value: number };
 
 type TestStores = BridgeStores<{
   counter: {
@@ -22,8 +19,7 @@ type TestStores = BridgeStores<{
 
 // Create a mock WebView implementation for testing
 class MockWebView implements WebView {
-  public onMessage: (event: { nativeEvent: { data: string } }) => void =
-    () => {};
+  public onMessage: (event: { nativeEvent: { data: string } }) => void = () => {};
   public messageQueue: string[] = [];
 
   postMessage(message: string): void {
@@ -61,7 +57,7 @@ describe("NativeBridge", () => {
       },
     });
 
-    bridge.setStore('counter', store);
+    bridge.setStore("counter", store);
   });
 
   describe("Store Management", () => {
@@ -97,7 +93,7 @@ describe("NativeBridge", () => {
       });
 
       // Set the store and verify listener was called
-      bridge.setStore('counter', store);
+      bridge.setStore("counter", store);
       expect(listener).toHaveBeenCalled();
     });
 
@@ -106,11 +102,11 @@ describe("NativeBridge", () => {
       bridge.subscribe(listener);
 
       // Remove the store and verify listener was called
-      bridge.setStore('counter', undefined);
+      bridge.setStore("counter", undefined);
       expect(listener).toHaveBeenCalled();
 
       // Verify store is no longer available
-      expect(bridge.getStore('counter')).toBeUndefined();
+      expect(bridge.getStore("counter")).toBeUndefined();
     });
   });
 
@@ -134,10 +130,10 @@ describe("NativeBridge", () => {
 
     test("handles ready state subscription", () => {
       const readyListener = vi.fn();
-      
+
       // Register the WebView first
       bridge.registerWebView(mockWebView);
-      
+
       // Then subscribe to ready state
       bridge.subscribeToReadyState(mockWebView, readyListener);
 
@@ -148,7 +144,7 @@ describe("NativeBridge", () => {
       bridge.handleWebMessage(
         JSON.stringify({
           type: "BRIDGE_READY",
-        })
+        }),
       );
 
       // Should be called with true when ready
@@ -174,7 +170,7 @@ describe("NativeBridge", () => {
       bridge.handleWebMessage(
         JSON.stringify({
           type: "BRIDGE_READY",
-        })
+        }),
       );
 
       // Clear initial messages
@@ -201,7 +197,7 @@ describe("NativeBridge", () => {
       bridge.handleWebMessage(
         JSON.stringify({
           type: "BRIDGE_READY",
-        })
+        }),
       );
 
       // Clear message queues
@@ -229,7 +225,7 @@ describe("NativeBridge", () => {
           type: "EVENT",
           storeKey: "counter",
           event: { type: "INCREMENT" },
-        })
+        }),
       );
 
       const snapshot = store?.getSnapshot();
@@ -245,10 +241,97 @@ describe("NativeBridge", () => {
       bridge.handleWebMessage(
         JSON.stringify({
           type: "BRIDGE_READY",
-        })
+        }),
       );
 
       expect(bridge.getReadyState(mockWebView)).toBe(true);
+    });
+
+    test("ignores invalid message formats without crashing", () => {
+      // Kills mutants on line 172: validation guard for parsedData
+      bridge.registerWebView(mockWebView);
+      const store = bridge.getStore("counter");
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      // Non-object (null after JSON.parse)
+      bridge.handleWebMessage(JSON.stringify(null));
+      expect(store?.getSnapshot().value).toBe(0);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Invalid message format"),
+        null,
+      );
+
+      consoleWarnSpy.mockClear();
+
+      // Primitive string (not an object)
+      bridge.handleWebMessage(JSON.stringify("just a string"));
+      expect(store?.getSnapshot().value).toBe(0);
+
+      consoleWarnSpy.mockClear();
+
+      // Object without 'type' field
+      bridge.handleWebMessage(JSON.stringify({ foo: "bar" }));
+      expect(store?.getSnapshot().value).toBe(0);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Invalid message format"),
+        expect.objectContaining({ foo: "bar" }),
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test("BRIDGE_READY sends STATE_INIT messages with correct type and data", () => {
+      // Kills mutants on line 186: type: "STATE_INIT" → type: ""
+      // and line 190: if (webView.postMessage) → if (true/false)
+      bridge.registerWebView(mockWebView);
+      mockWebView.messageQueue = []; // clear registration messages
+
+      bridge.handleWebMessage(JSON.stringify({ type: "BRIDGE_READY" }));
+
+      // Should have sent STATE_INIT for the counter store
+      expect(mockWebView.messageQueue.length).toBe(1);
+      const msg = JSON.parse(mockWebView.messageQueue[0]);
+      expect(msg.type).toBe("STATE_INIT");
+      expect(msg.storeKey).toBe("counter");
+      expect(msg.data).toEqual({ value: 0 });
+    });
+
+    test("broadcastToWebViews tolerates WebView without postMessage", () => {
+      // Kills mutant on line 152: if (webView.postMessage) → if (true)
+      const brokenWebView = {} as WebView; // no postMessage method
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      bridge.registerWebView(brokenWebView);
+
+      // setStore triggers broadcastToWebViews internally — should not throw
+      const store2 = createStore({
+        initialState: { value: 99 },
+        producer: (draft: CounterState, event: CounterEvents) => {
+          if (event.type === "INCREMENT") draft.value += 1;
+        },
+      });
+      expect(() => bridge.setStore("counter", store2)).not.toThrow();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("lacks postMessage"));
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test("unparseable JSON message is warned and ignored", () => {
+      // Kills mutant: JSON.parse catch path
+      bridge.registerWebView(mockWebView);
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      bridge.handleWebMessage("not valid json {{{");
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Failed to parse message"),
+        expect.any(String),
+        expect.any(Error),
+      );
+      // Store state unchanged
+      expect(bridge.getStore("counter")?.getSnapshot().value).toBe(0);
+
+      consoleWarnSpy.mockRestore();
     });
   });
 });
