@@ -333,5 +333,65 @@ describe("NativeBridge", () => {
 
       consoleWarnSpy.mockRestore();
     });
+
+    test("isSupported returns exactly true", () => {
+      // Kills mutant: () => true → () => undefined
+      expect(bridge.isSupported()).toBe(true);
+    });
+
+    test("handleWebMessage accepts nativeEvent object format", () => {
+      // Kills mutant: typeof message === "string" ? message : message.nativeEvent.data → true ? message : ...
+      bridge.registerWebView(mockWebView);
+      const store = bridge.getStore("counter");
+
+      // Use the nativeEvent object format instead of string
+      bridge.handleWebMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: "EVENT",
+            storeKey: "counter",
+            event: { type: "INCREMENT" },
+          }),
+        },
+      });
+
+      expect(store?.getSnapshot().value).toBe(1);
+    });
+
+    test("STATE_UPDATE broadcast contains correct type and data on state change", () => {
+      // Kills mutants: type: "STATE_UPDATE" → "" and broadcastToWebViews({}) empty object
+      bridge.registerWebView(mockWebView);
+      bridge.handleWebMessage(JSON.stringify({ type: "BRIDGE_READY" }));
+      mockWebView.messageQueue = [];
+
+      const store = bridge.getStore("counter");
+      store?.dispatch({ type: "INCREMENT" });
+
+      expect(mockWebView.messageQueue.length).toBe(1);
+      const msg = JSON.parse(mockWebView.messageQueue[0]);
+      expect(msg.type).toBe("STATE_UPDATE");
+      expect(msg.storeKey).toBe("counter");
+      expect(msg.operations).toBeDefined();
+      expect(msg.operations.length).toBeGreaterThan(0);
+    });
+
+    test("no STATE_UPDATE broadcast when state does not change", () => {
+      // Kills mutants: operations.length > 0 → >= 0 and → true
+      bridge.registerWebView(mockWebView);
+      bridge.handleWebMessage(JSON.stringify({ type: "BRIDGE_READY" }));
+      mockWebView.messageQueue = [];
+
+      // Dispatch SET with same value — no state change
+      const store = bridge.getStore("counter");
+      store?.dispatch({ type: "SET", value: 0 });
+
+      // No STATE_UPDATE should be sent since state didn't change
+      expect(mockWebView.messageQueue.length).toBe(0);
+    });
+
+    test("getReadyState returns false for null webView", () => {
+      // Kills mutant: if (!webView) return false → if (false) return false
+      expect(bridge.getReadyState(null)).toBe(false);
+    });
   });
 });
