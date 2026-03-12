@@ -44,10 +44,7 @@ interface CounterState extends State {
   count: number;
 }
 
-type CounterEvent =
-  | { type: "INCREMENT" }
-  | { type: "DECREMENT" }
-  | { type: "SET"; value: number };
+type CounterEvent = { type: "INCREMENT" } | { type: "DECREMENT" } | { type: "SET"; value: number };
 
 interface TestStores extends BridgeStores {
   counter: {
@@ -82,7 +79,7 @@ describe("React Bridge Integration", () => {
           storeKey: "counter",
           data: { count: 0 },
         }),
-      })
+      }),
     );
   });
 
@@ -105,16 +102,14 @@ describe("React Bridge Integration", () => {
       render(
         <ErrorBoundary onError={errorHandler}>
           <TestComponent />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       // Error boundary should catch the error
       expect(screen.getByTestId("error-boundary")).toBeInTheDocument();
       // And our error handler should have been called with the right error
       expect(errorHandler).toHaveBeenCalled();
-      expect(errorHandler.mock.calls[0][0].message).toMatch(
-        /Store "counter" is not available/
-      );
+      expect(errorHandler.mock.calls[0][0].message).toMatch(/Store "counter" is not available/);
     });
 
     it("renders Supported content when bridge is supported", () => {
@@ -126,13 +121,11 @@ describe("React Bridge Integration", () => {
           <Unsupported>
             <div data-testid="unsupported-content">Unsupported</div>
           </Unsupported>
-        </BridgeProvider>
+        </BridgeProvider>,
       );
 
       expect(screen.getByTestId("supported-content")).toBeInTheDocument();
-      expect(
-        screen.queryByTestId("unsupported-content")
-      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId("unsupported-content")).not.toBeInTheDocument();
     });
 
     it("renders Unsupported content when bridge is not supported", () => {
@@ -149,7 +142,7 @@ describe("React Bridge Integration", () => {
           <Unsupported>
             <div data-testid="unsupported-content">Unsupported</div>
           </Unsupported>
-        </BridgeProvider>
+        </BridgeProvider>,
       );
 
       expect(screen.queryByTestId("supported-content")).not.toBeInTheDocument();
@@ -171,7 +164,7 @@ describe("React Bridge Integration", () => {
             <CounterContext.Loading>
               <div data-testid="loading-content">Store is loading</div>
             </CounterContext.Loading>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         expect(screen.queryByTestId("provider-content")).not.toBeInTheDocument();
@@ -190,7 +183,7 @@ describe("React Bridge Integration", () => {
             <CounterContext.Loading>
               <div data-testid="loading-content">Store is loading</div>
             </CounterContext.Loading>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         // Initially should show loading
@@ -206,7 +199,7 @@ describe("React Bridge Integration", () => {
                 storeKey: "counter",
                 data: { count: 0 },
               }),
-            })
+            }),
           );
         });
 
@@ -225,7 +218,7 @@ describe("React Bridge Integration", () => {
             <CounterContext.Loading>
               <div data-testid="loading-content">Store is loading</div>
             </CounterContext.Loading>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         expect(screen.queryByTestId("loading-content")).not.toBeInTheDocument();
@@ -240,7 +233,7 @@ describe("React Bridge Integration", () => {
             <CounterContext.Loading>
               <div data-testid="loading-content">Store is loading</div>
             </CounterContext.Loading>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         // Initially should show provider content
@@ -256,7 +249,7 @@ describe("React Bridge Integration", () => {
                 storeKey: "counter",
                 data: null,
               }),
-            })
+            }),
           );
         });
 
@@ -271,9 +264,7 @@ describe("React Bridge Integration", () => {
         const CounterDisplay = () => {
           const store = CounterContext.useStore()!;
           const snapshot = store.getSnapshot();
-          return (
-            <div data-testid="counter">Count: {snapshot?.count ?? 'N/A'}</div>
-          );
+          return <div data-testid="counter">Count: {snapshot?.count ?? "N/A"}</div>;
         };
 
         render(
@@ -281,7 +272,7 @@ describe("React Bridge Integration", () => {
             <CounterContext.Provider>
               <CounterDisplay />
             </CounterContext.Provider>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         expect(screen.getByTestId("counter")).toHaveTextContent("Count: 0");
@@ -292,7 +283,7 @@ describe("React Bridge Integration", () => {
         const UseStoreOutsideProvider = () => {
           const store = CounterContext.useStore();
           const snapshot = store?.getSnapshot();
-          return <div>{snapshot?.count ?? 'N/A'}</div>;
+          return <div>{snapshot?.count ?? "N/A"}</div>;
         };
 
         const errorHandler = vi.fn();
@@ -302,16 +293,14 @@ describe("React Bridge Integration", () => {
             <ErrorBoundary onError={errorHandler}>
               <UseStoreOutsideProvider />
             </ErrorBoundary>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         // Error boundary should catch the error
         expect(screen.getByTestId("error-boundary")).toBeInTheDocument();
         // And our error handler should have been called with the right error
         expect(errorHandler).toHaveBeenCalled();
-        expect(errorHandler.mock.calls[0][0].message).toMatch(
-          /Store "counter" is not available/
-        );
+        expect(errorHandler.mock.calls[0][0].message).toMatch(/Store "counter" is not available/);
       });
     });
 
@@ -319,7 +308,7 @@ describe("React Bridge Integration", () => {
       it("selects data from a store", () => {
         const CounterValue = () => {
           const count = CounterContext.useSelector((state) => state?.count);
-          return <div data-testid="counter-value">{count ?? 'N/A'}</div>;
+          return <div data-testid="counter-value">{count ?? "N/A"}</div>;
         };
 
         render(
@@ -327,7 +316,7 @@ describe("React Bridge Integration", () => {
             <CounterContext.Provider>
               <CounterValue />
             </CounterContext.Provider>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         expect(screen.getByTestId("counter-value")).toHaveTextContent("0");
@@ -336,7 +325,7 @@ describe("React Bridge Integration", () => {
       it("updates when store state changes", () => {
         const CounterValue = () => {
           const count = CounterContext.useSelector((state) => state?.count);
-          return <div data-testid="counter-value">{count ?? 'N/A'}</div>;
+          return <div data-testid="counter-value">{count ?? "N/A"}</div>;
         };
 
         render(
@@ -344,7 +333,7 @@ describe("React Bridge Integration", () => {
             <CounterContext.Provider>
               <CounterValue />
             </CounterContext.Provider>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         // Initial state
@@ -359,7 +348,7 @@ describe("React Bridge Integration", () => {
                 storeKey: "counter",
                 operations: [{ op: "replace", path: "/count", value: 42 }],
               }),
-            })
+            }),
           );
         });
 
@@ -370,7 +359,7 @@ describe("React Bridge Integration", () => {
       it("throws when used outside of Provider", () => {
         const UseSelectorOutsideProvider = () => {
           const count = CounterContext.useSelector((state) => state?.count);
-          return <div>{count ?? 'N/A'}</div>;
+          return <div>{count ?? "N/A"}</div>;
         };
 
         const errorHandler = vi.fn();
@@ -380,17 +369,126 @@ describe("React Bridge Integration", () => {
             <ErrorBoundary onError={errorHandler}>
               <UseSelectorOutsideProvider />
             </ErrorBoundary>
-          </BridgeProvider>
+          </BridgeProvider>,
         );
 
         // Error boundary should catch the error
         expect(screen.getByTestId("error-boundary")).toBeInTheDocument();
         // And our error handler should have been called with the right error
         expect(errorHandler).toHaveBeenCalled();
-        expect(errorHandler.mock.calls[0][0].message).toMatch(
-          /Store "counter" is not available/
+        expect(errorHandler.mock.calls[0][0].message).toMatch(/Store "counter" is not available/);
+      });
+    });
+  });
+
+  describe("Bridge context default (no provider)", () => {
+    it("throws with descriptive error message when bridge is used outside BridgeProvider", () => {
+      const errorHandler = vi.fn();
+
+      const UseBridgeOutsideProvider = () => {
+        // Supported internally calls useBridge() → bridge.isSupported()
+        return (
+          <Supported>
+            <div>Should not render</div>
+          </Supported>
+        );
+      };
+
+      render(
+        <ErrorBoundary onError={errorHandler}>
+          <UseBridgeOutsideProvider />
+        </ErrorBoundary>,
+      );
+
+      expect(screen.getByTestId("error-boundary")).toBeInTheDocument();
+      expect(errorHandler).toHaveBeenCalled();
+      expect(errorHandler.mock.calls[0][0].message).toMatch(/Bridge not found in context/);
+    });
+  });
+
+  describe("Reactivity to bridge prop changes", () => {
+    it("Provider updates context when bridge prop changes", () => {
+      // First bridge has a store initialized
+      const bridge1 = createWebBridge<TestStores>();
+
+      // Render with bridge1 that has a counter store
+      const { rerender } = render(
+        <BridgeProvider bridge={bridge1}>
+          <CounterContext.Provider>
+            <div data-testid="store-available">Store available</div>
+          </CounterContext.Provider>
+        </BridgeProvider>,
+      );
+
+      // bridge1 has no store yet
+      expect(screen.queryByTestId("store-available")).not.toBeInTheDocument();
+
+      // Initialize store on bridge1
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({
+              type: "STATE_INIT",
+              storeKey: "counter",
+              data: { count: 10 },
+            }),
+          }),
         );
       });
+
+      expect(screen.getByTestId("store-available")).toBeInTheDocument();
+
+      // Create a brand new bridge without initialized stores
+      // Remove and re-add ReactNativeWebView to get a clean bridge
+      delete (window as any).ReactNativeWebView;
+      (window as any).ReactNativeWebView = { postMessage: vi.fn() };
+      const bridge2 = createWebBridge<TestStores>();
+
+      // Re-render with bridge2 — store should no longer be available
+      rerender(
+        <BridgeProvider bridge={bridge2}>
+          <CounterContext.Provider>
+            <div data-testid="store-available">Store available</div>
+          </CounterContext.Provider>
+        </BridgeProvider>,
+      );
+
+      // bridge2 has no counter store, so Provider should render null
+      expect(screen.queryByTestId("store-available")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("useSelector reactivity", () => {
+    it("updates when selector function changes", () => {
+      const DynamicSelector = ({ field }: { field: string }) => {
+        const selector =
+          field === "count"
+            ? (state: CounterState) => `count:${state.count}`
+            : (state: CounterState) => `double:${state.count * 2}`;
+        const value = CounterContext.useSelector(selector);
+        return <div data-testid="selector-value">{value}</div>;
+      };
+
+      const { rerender } = render(
+        <BridgeProvider bridge={bridge}>
+          <CounterContext.Provider>
+            <DynamicSelector field="count" />
+          </CounterContext.Provider>
+        </BridgeProvider>,
+      );
+
+      expect(screen.getByTestId("selector-value")).toHaveTextContent("count:0");
+
+      // Change selector by changing prop
+      rerender(
+        <BridgeProvider bridge={bridge}>
+          <CounterContext.Provider>
+            <DynamicSelector field="double" />
+          </CounterContext.Provider>
+        </BridgeProvider>,
+      );
+
+      expect(screen.getByTestId("selector-value")).toHaveTextContent("double:0");
     });
   });
 });
