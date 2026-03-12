@@ -24,7 +24,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@babel/runtime": "^7.0.0",
-    "@open-game-system/app-bridge-testing": "^0.20250410.4",
+    "@open-game-system/app-bridge-testing": "workspace:*",
     "@testing-library/react-native": "^12.4.3",
     "@types/jest": "^29.5.12",
     "@types/react": "^18.2.55",
