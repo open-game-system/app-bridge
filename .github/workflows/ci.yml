@@ -95,7 +95,8 @@ jobs:
     - name: Generate dev version for ${{ matrix.package }}
       id: version
       env:
-        GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN }}
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         PACKAGE_DIR="packages/app-bridge-${{ matrix.package }}"
         PACKAGE_JSON_PATH="${PACKAGE_DIR}/package.json"
@@ -112,10 +113,10 @@ jobs:
         # Get PR number
         PR_NUMBER=$(echo $GITHUB_REF | sed -n 's/refs\/pull\/\([0-9]*\)\/merge/\1/p')
         
-        # Configure npm to use GitHub registry for version check
+        # Configure npm to use GitHub registry for version check (auth via GITHUB_TOKEN)
         echo "Configuring npm to use GitHub registry for @open-game-system..."
         echo "@open-game-system:registry=https://npm.pkg.github.com" >> .npmrc
-        echo "//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}" >> .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc
         
         # Get published versions to find highest patch
         echo "Checking GitHub registry for existing versions..."
@@ -146,8 +147,6 @@ jobs:
         echo "DEV_VERSION=${DEV_VERSION}" >> $GITHUB_OUTPUT
         echo "PACKAGE_DIR=${PACKAGE_DIR}" >> $GITHUB_OUTPUT
         echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
-      env:
-        GITHUB_REF: ${{ github.ref }}
 
     - name: Update version in package.json for ${{ matrix.package }}
       run: |
@@ -167,7 +166,7 @@ jobs:
 
     - name: Publish ${{ matrix.package }} to GitHub Packages
       env:
-        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN }}
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
         MAX_RETRIES=5
