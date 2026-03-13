@@ -119,7 +119,8 @@ jobs:
         
         # Get published versions to find highest patch
         echo "Checking GitHub registry for existing versions..."
-        NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --registry https://npm.pkg.github.com/ 2>/dev/null || echo "[]")
+        # Use --json so jq can reliably parse the output; handle both string and array shapes
+        NPM_VERSIONS=$(npm view ${PACKAGE_NAME} versions --registry https://npm.pkg.github.com/ --json 2>/dev/null || echo "[]")
         
         # Find highest patch for this PR today
         VERSION_PREFIX="${MAJOR_VERSION}.${DATE}"
@@ -128,9 +129,10 @@ jobs:
         if [[ "$NPM_VERSIONS" != "[]" ]]; then
           # Need to escape dots for regex and use single quotes to prevent shell expansion
           HIGHEST_PATCH=$(echo "$NPM_VERSIONS" | jq -r --arg prefix "$VERSION_PREFIX" --arg pr "$PR_NUMBER" '
-            map(select(test("^" + $prefix + "\\\\.[0-9]+-pr" + $pr + "$"))) |
-            map(capture("^" + $prefix + "\\\\.(\\\\d+)-pr" + $pr + "$")[0] | tonumber) |
-            max // -1
+            (if type == "array" then . else [.] end)
+            | map(select(test("^" + $prefix + "\\\\.[0-9]+-pr" + $pr + "$")))
+            | map(match("^" + $prefix + "\\\\.(\\\\d+)-pr" + $pr + "$").captures[0].string | tonumber)
+            | max // -1
           ')
         fi
         
