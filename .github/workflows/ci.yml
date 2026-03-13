@@ -94,6 +94,8 @@ jobs:
 
     - name: Generate dev version for ${{ matrix.package }}
       id: version
+      env:
+        GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN }}
       run: |
         PACKAGE_DIR="packages/app-bridge-${{ matrix.package }}"
         PACKAGE_JSON_PATH="${PACKAGE_DIR}/package.json"
@@ -113,7 +115,7 @@ jobs:
         # Configure npm to use GitHub registry for version check
         echo "Configuring npm to use GitHub registry for @open-game-system..."
         echo "@open-game-system:registry=https://npm.pkg.github.com" >> .npmrc
-        echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}" >> .npmrc
         
         # Get published versions to find highest patch
         echo "Checking GitHub registry for existing versions..."
@@ -146,7 +148,6 @@ jobs:
         echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
       env:
         GITHUB_REF: ${{ github.ref }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Update version in package.json for ${{ matrix.package }}
       run: |
@@ -166,7 +167,7 @@ jobs:
 
     - name: Publish ${{ matrix.package }} to GitHub Packages
       env:
-        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN }}
       run: |
         cd ${{ steps.version.outputs.PACKAGE_DIR }}
         MAX_RETRIES=5
@@ -214,7 +215,7 @@ jobs:
           echo "Failed to publish after ${MAX_RETRIES} retries."
           echo "Final attempt output for version ${VERSION}:"
           cat "$OUTPUT_FILE"
-          echo "Continuing without failing the CI job (dev publish is best-effort)."
+          exit 1
         fi
 
     - name: Comment on PR for ${{ matrix.package }}
