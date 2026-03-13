@@ -63,8 +63,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 18
-        registry-url: 'https://npm.pkg.github.com'
-        scope: '@open-game-system'
 
     - name: Setup pnpm
       uses: pnpm/action-setup@v3
